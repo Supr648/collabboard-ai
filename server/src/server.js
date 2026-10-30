@@ -102,6 +102,8 @@ const io = new SocketIOServer(server, {
 setupSocketHandlers(io);
 
 // Root information endpoint
+app.get('/service-worker.js', (req, res) => res.status(204).end());
+app.get('/favicon.ico', (req, res) => res.status(204).end());
 app.get('/', (req, res) => {
   res.json({
     success: true,
