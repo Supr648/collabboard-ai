@@ -5,7 +5,20 @@ import {
   renderSelectionOutline,
   getHandleAtPoint,
   getElementBoundingBox,
+  findNearestAnchorPoint,
+  renderLaserTrail,
 } from '../../utils/canvasUtils';
+import {
+  Copy,
+  Trash2,
+  Lock,
+  Unlock,
+  CheckSquare,
+  ArrowUpToLine,
+  ArrowDownToLine,
+  Layers,
+  Sparkles,
+} from 'lucide-react';
 
 const Canvas = ({
   elements,
@@ -29,6 +42,15 @@ const Canvas = ({
   onCursorMove,
   isDark = false,
   isReadOnly = false,
+  onConvertToTask,
+  onLaserMove,
+  remoteLaserTrail = [],
+  onBringToFront,
+  onSendToBack,
+  onToggleLock,
+  onGroup,
+  onUngroup,
+  onDuplicateSelected,
 }) => {
   const canvasRef = useRef(null);
   const isDrawingRef = useRef(false);
@@ -36,10 +58,13 @@ const Canvas = ({
   const isPanningRef = useRef(false);
   const panStartRef = useRef({ x: 0, y: 0 });
 
+  // Laser Pointer Trail
+  const laserTrailRef = useRef([]);
+
   // Move / Drag state for selected element
   const isDraggingSelectionRef = useRef(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
-  const activeHandleRef = useRef(null); // 'nw' | 'ne' | 'se' | 'sw'
+  const activeHandleRef = useRef(null);
   const initialElementStateRef = useRef(null);
 
   // Marquee selection box
@@ -53,6 +78,9 @@ const Canvas = ({
   // Inline text input state
   const [textInput, setTextInput] = useState(null);
   const [textContent, setTextContent] = useState('');
+
+  // Right-click Context Menu
+  const [contextMenu, setContextMenu] = useState(null);
 
   // Coordinate snapping helper
   const snap = useCallback(
@@ -125,6 +153,14 @@ const Canvas = ({
       renderElement(ctx, remoteLiveStroke, imageCacheRef.current);
     }
 
+    // Render Local & Remote Laser Pointer Trails
+    if (laserTrailRef.current.length > 0) {
+      renderLaserTrail(ctx, laserTrailRef.current);
+    }
+    if (remoteLaserTrail.length > 0) {
+      renderLaserTrail(ctx, remoteLaserTrail);
+    }
+
     // Render selection bounding box & resize handles
     if (selectedElements.length > 0) {
       renderSelectionOutline(ctx, selectedElements);
@@ -143,7 +179,7 @@ const Canvas = ({
     }
 
     ctx.restore();
-  }, [elements, zoom, pan, remoteLiveStroke, selectedElements, marqueeBox]);
+  }, [elements, zoom, pan, remoteLiveStroke, selectedElements, marqueeBox, remoteLaserTrail]);
 
   useEffect(() => {
     redrawCanvas();
@@ -169,8 +205,35 @@ const Canvas = ({
     }
   };
 
+  // Right Click Context Menu Handler
+  const handleContextMenu = (e) => {
+    e.preventDefault();
+    const { x, y } = screenToCanvas(e.clientX, e.clientY);
+
+    let hitElement = null;
+    for (let i = elements.length - 1; i >= 0; i--) {
+      if (isPointNearElement(x, y, elements[i], 10)) {
+        hitElement = elements[i];
+        break;
+      }
+    }
+
+    if (hitElement) {
+      if (!selectedElements.some((el) => el.id === hitElement.id)) {
+        setSelectedElements([hitElement]);
+      }
+      setContextMenu({ x: e.clientX, y: e.clientY, element: hitElement });
+    } else {
+      setContextMenu({ x: e.clientX, y: e.clientY, element: null });
+    }
+  };
+
   // Mouse Down
   const handleMouseDown = (e) => {
+    if (contextMenu) {
+      setContextMenu(null);
+    }
+
     if (textInput) {
       commitText();
       return;
@@ -194,10 +257,19 @@ const Canvas = ({
       return;
     }
 
+    // Laser Pointer Tool
+    if (activeTool === 'laser') {
+      isDrawingRef.current = true;
+      laserTrailRef.current = [{ x, y, time: Date.now() }];
+      onLaserMove?.(x, y);
+      redrawCanvas();
+      return;
+    }
+
     // Select Tool Handling
     if (activeTool === 'select') {
-      // 1. Check if clicked a resize handle of currently selected element
-      if (selectedElements.length === 1) {
+      // 1. Check if clicked a resize handle of currently selected element (only if not locked)
+      if (selectedElements.length === 1 && !selectedElements[0].isLocked) {
         const handle = getHandleAtPoint(x, y, selectedElements[0]);
         if (handle) {
           activeHandleRef.current = handle;
@@ -217,21 +289,28 @@ const Canvas = ({
       }
 
       if (hitElement) {
+        // If element is in a group, select the entire group
+        let elementsToSelect = [hitElement];
+        if (hitElement.groupId) {
+          elementsToSelect = elements.filter((el) => el.groupId === hitElement.groupId);
+        }
+
         if (e.shiftKey) {
-          // Toggle selection
           const exists = selectedElements.some((el) => el.id === hitElement.id);
           if (exists) {
             setSelectedElements((prev) => prev.filter((el) => el.id !== hitElement.id));
           } else {
-            setSelectedElements((prev) => [...prev, hitElement]);
+            setSelectedElements((prev) => [...prev, ...elementsToSelect]);
           }
         } else {
-          // Single selection
-          setSelectedElements([hitElement]);
+          setSelectedElements(elementsToSelect);
         }
-        isDraggingSelectionRef.current = true;
-        dragStartRef.current = { x, y };
-        initialElementStateRef.current = JSON.parse(JSON.stringify(elements));
+
+        if (!hitElement.isLocked) {
+          isDraggingSelectionRef.current = true;
+          dragStartRef.current = { x, y };
+          initialElementStateRef.current = JSON.parse(JSON.stringify(elements));
+        }
         return;
       }
 
@@ -291,17 +370,42 @@ const Canvas = ({
         text: 'Sticky Note\nDouble click to edit',
         opacity,
       };
-    } else if (['line', 'arrow', 'rectangle', 'circle', 'triangle'].includes(activeTool)) {
+    } else if (activeTool === 'frame') {
+      const frameCount = elements.filter((e) => e.type === 'frame').length + 1;
       currentElementRef.current = {
         id,
-        type: activeTool,
+        type: 'frame',
         x1: snappedX,
         y1: snappedY,
         x2: snappedX,
         y2: snappedY,
+        strokeColor: '#6366f1',
+        title: `Frame ${frameCount}`,
+        opacity: 1,
+      };
+    } else if (['line', 'arrow', 'rectangle', 'circle', 'triangle', 'diamond', 'polygon'].includes(activeTool)) {
+      let startX = snappedX;
+      let startY = snappedY;
+
+      // Magnetic Snapping for line/arrow start
+      if (activeTool === 'line' || activeTool === 'arrow') {
+        const anchor = findNearestAnchorPoint(x, y, elements);
+        if (anchor) {
+          startX = anchor.x;
+          startY = anchor.y;
+        }
+      }
+
+      currentElementRef.current = {
+        id,
+        type: activeTool,
+        x1: startX,
+        y1: startY,
+        x2: startX,
+        y2: startY,
         strokeColor,
         strokeWidth,
-        fillColor: ['rectangle', 'circle', 'triangle'].includes(activeTool) ? fillColor : undefined,
+        fillColor: ['rectangle', 'circle', 'triangle', 'diamond', 'polygon'].includes(activeTool) ? fillColor : undefined,
         opacity,
       };
     }
@@ -315,6 +419,14 @@ const Canvas = ({
 
     // Broadcast cursor position
     onCursorMove(x, y, activeTool);
+
+    // Laser pointer movement
+    if (activeTool === 'laser' && isDrawingRef.current) {
+      laserTrailRef.current.push({ x, y, time: Date.now() });
+      onLaserMove?.(x, y);
+      redrawCanvas();
+      return;
+    }
 
     // Handle Panning
     if (isPanningRef.current) {
@@ -349,6 +461,7 @@ const Canvas = ({
 
       if (dx !== 0 || dy !== 0) {
         selectedElements.forEach((sel) => {
+          if (sel.isLocked) return;
           const updated = { ...sel };
           if (updated.points) {
             updated.points = updated.points.map((p) => ({ x: p.x + dx, y: p.y + dy }));
@@ -363,40 +476,35 @@ const Canvas = ({
           }
           onUpdateElement(updated);
         });
+
         dragStartRef.current = { x, y };
       }
       return;
     }
 
-    // Handle Marquee Selection
+    // Handle Marquee Dragging
     if (isMarqueeRef.current) {
-      const startX = marqueeStartRef.current.x;
-      const startY = marqueeStartRef.current.y;
-      const box = {
-        x: Math.min(startX, x),
-        y: Math.min(startY, y),
-        w: Math.abs(x - startX),
-        h: Math.abs(y - startY),
-      };
-      setMarqueeBox(box);
+      const start = marqueeStartRef.current;
+      const curX = Math.min(start.x, x);
+      const curY = Math.min(start.y, y);
+      const curW = Math.abs(x - start.x);
+      const curH = Math.abs(y - start.y);
 
-      // Find all elements within marquee box
-      const hits = elements.filter((el) => {
+      setMarqueeBox({ x: curX, y: curY, w: curW, h: curH });
+
+      const enclosed = elements.filter((el) => {
         const b = getElementBoundingBox(el);
         if (!b) return false;
-        return (
-          b.minX >= box.x &&
-          b.maxX <= box.x + box.w &&
-          b.minY >= box.y &&
-          b.maxY <= box.y + box.h
-        );
+        return b.minX >= curX && b.maxX <= curX + curW && b.minY >= curY && b.maxY <= curY + curH;
       });
-      setSelectedElements(hits);
+
+      setSelectedElements(enclosed);
       return;
     }
 
     if (!isDrawingRef.current) return;
 
+    // Eraser Tool Dragging
     if (activeTool === 'eraser') {
       eraseElementAt(x, y);
       return;
@@ -412,7 +520,18 @@ const Canvas = ({
         current.points.push({ x, y });
         redrawCanvas();
       }
-    } else if (['line', 'arrow', 'rectangle', 'circle', 'triangle', 'sticky'].includes(current.type)) {
+    } else if (['line', 'arrow'].includes(current.type)) {
+      // Magnetic snapping for line/arrow end
+      const anchor = findNearestAnchorPoint(x, y, elements, current.id);
+      if (anchor) {
+        current.x2 = anchor.x;
+        current.y2 = anchor.y;
+      } else {
+        current.x2 = snap(x);
+        current.y2 = snap(y);
+      }
+      redrawCanvas();
+    } else if (['rectangle', 'circle', 'triangle', 'diamond', 'polygon', 'frame', 'sticky'].includes(current.type)) {
       current.x2 = snap(x);
       current.y2 = snap(y);
       redrawCanvas();
@@ -421,6 +540,15 @@ const Canvas = ({
 
   // Mouse Up
   const handleMouseUp = () => {
+    if (activeTool === 'laser') {
+      isDrawingRef.current = false;
+      setTimeout(() => {
+        laserTrailRef.current = [];
+        redrawCanvas();
+      }, 1200);
+      return;
+    }
+
     if (isPanningRef.current) {
       isPanningRef.current = false;
       return;
@@ -453,7 +581,7 @@ const Canvas = ({
       if ((current.type === 'pen' || current.type === 'highlighter') && current.points.length < 2) {
         isValid = false;
       } else if (
-        ['line', 'arrow', 'rectangle', 'circle', 'triangle'].includes(current.type) &&
+        ['line', 'arrow', 'rectangle', 'circle', 'triangle', 'diamond', 'polygon', 'frame'].includes(current.type) &&
         Math.hypot(current.x2 - current.x1, current.y2 - current.y1) < 4
       ) {
         isValid = false;
@@ -508,6 +636,7 @@ const Canvas = ({
 
   const getCursorStyle = () => {
     if (isPanningRef.current) return 'grabbing';
+    if (activeTool === 'laser') return 'crosshair';
     if (activeTool === 'select') {
       if (activeHandleRef.current) return 'nwse-resize';
       return isDraggingSelectionRef.current ? 'grabbing' : 'default';
@@ -516,6 +645,29 @@ const Canvas = ({
     if (activeTool === 'text') return 'text';
     return 'crosshair';
   };
+
+  // Get screen position for the Contextual Floating Action Toolbar
+  const getContextualToolbarPos = () => {
+    if (selectedElements.length === 0 || !canvasRef.current) return null;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity;
+    selectedElements.forEach((el) => {
+      const box = getElementBoundingBox(el);
+      if (box) {
+        minX = Math.min(minX, box.minX);
+        minY = Math.min(minY, box.minY);
+        maxX = Math.max(maxX, box.maxX);
+      }
+    });
+    if (minX === Infinity) return null;
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const midX = (minX + maxX) / 2;
+    const screenX = midX * zoom + pan.x + rect.left;
+    const screenY = minY * zoom + pan.y + rect.top - 46;
+    return { x: screenX, y: Math.max(15, screenY) };
+  };
+
+  const toolbarPos = getContextualToolbarPos();
 
   return (
     <div
@@ -530,9 +682,189 @@ const Canvas = ({
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
+        onContextMenu={handleContextMenu}
         style={{ cursor: getCursorStyle() }}
         className="block touch-none"
       />
+
+      {/* Floating Contextual Toolbar above selection */}
+      {selectedElements.length > 0 && !isDraggingSelectionRef.current && !contextMenu && toolbarPos && (
+        <div
+          className="fixed z-40 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 rounded-2xl glass-panel shadow-2xl border border-slate-200/90 dark:border-slate-700/90 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md animate-in fade-in zoom-in-95 duration-100"
+          style={{
+            left: `${toolbarPos.x}px`,
+            top: `${toolbarPos.y}px`,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Quick Color Swatches */}
+          {['#6366f1', '#10b981', '#ef4444', '#f59e0b', '#8b5cf6'].map((c) => (
+            <button
+              key={c}
+              onClick={() => {
+                selectedElements.forEach((el) => {
+                  onUpdateElement({
+                    ...el,
+                    strokeColor: c,
+                    fillColor: el.fillColor && el.fillColor !== 'transparent' ? `${c}22` : el.fillColor,
+                  });
+                });
+              }}
+              style={{ backgroundColor: c }}
+              className="w-4 h-4 rounded-full ring-1 ring-white/50 hover:scale-125 transition-transform"
+            />
+          ))}
+
+          <div className="h-4 w-[1px] bg-slate-200 dark:bg-slate-700 mx-1" />
+
+          {/* Quick Lock Toggle */}
+          <button
+            onClick={() => onToggleLock?.()}
+            title={selectedElements.some((e) => e.isLocked) ? 'Unlock' : 'Lock'}
+            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          >
+            {selectedElements.some((e) => e.isLocked) ? (
+              <Unlock className="w-3.5 h-3.5 text-emerald-500" />
+            ) : (
+              <Lock className="w-3.5 h-3.5" />
+            )}
+          </button>
+
+          {/* Quick Convert to Task */}
+          <button
+            onClick={() => onConvertToTask?.(selectedElements[0])}
+            title="Convert to Kanban Task"
+            className="p-1.5 rounded-lg text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors"
+          >
+            <CheckSquare className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Duplicate */}
+          <button
+            onClick={() => onDuplicateSelected?.()}
+            title="Duplicate (Ctrl+D)"
+            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          >
+            <Copy className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Delete */}
+          <button
+            onClick={() => selectedElements.forEach((el) => onDeleteElement(el.id))}
+            title="Delete (Del)"
+            className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Right-Click Context Menu */}
+      {contextMenu && (
+        <div
+          className="fixed z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 py-1.5 min-w-[210px] text-xs font-medium text-slate-700 dark:text-slate-300 animate-in fade-in zoom-in-95 duration-100"
+          style={{
+            left: `${Math.min(window.innerWidth - 230, contextMenu.x)}px`,
+            top: `${Math.min(window.innerHeight - 320, contextMenu.y)}px`,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {contextMenu.element && (
+            <>
+              <button
+                onClick={() => {
+                  onDuplicateSelected?.();
+                  setContextMenu(null);
+                }}
+                className="w-full px-3.5 py-2 text-left hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2.5 transition-colors"
+              >
+                <Copy className="w-4 h-4 text-slate-400" />
+                <span>Duplicate Element</span>
+                <span className="ml-auto text-[10px] text-slate-400">Ctrl+D</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  onToggleLock?.();
+                  setContextMenu(null);
+                }}
+                className="w-full px-3.5 py-2 text-left hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2.5 transition-colors"
+              >
+                {contextMenu.element?.isLocked ? (
+                  <Unlock className="w-4 h-4 text-emerald-500" />
+                ) : (
+                  <Lock className="w-4 h-4 text-rose-500" />
+                )}
+                <span>{contextMenu.element?.isLocked ? 'Unlock Element' : 'Lock Element'}</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  if (onConvertToTask && contextMenu.element) {
+                    onConvertToTask(contextMenu.element);
+                  }
+                  setContextMenu(null);
+                }}
+                className="w-full px-3.5 py-2 text-left hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-semibold flex items-center gap-2.5 transition-colors"
+              >
+                <CheckSquare className="w-4 h-4" />
+                <span>Convert to Kanban Task</span>
+              </button>
+
+              <div className="h-[1px] bg-slate-100 dark:bg-slate-800 my-1" />
+
+              <button
+                onClick={() => {
+                  onBringToFront?.();
+                  setContextMenu(null);
+                }}
+                className="w-full px-3.5 py-1.5 text-left hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2.5 transition-colors"
+              >
+                <ArrowUpToLine className="w-4 h-4 text-slate-400" />
+                <span>Bring to Front</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  onSendToBack?.();
+                  setContextMenu(null);
+                }}
+                className="w-full px-3.5 py-1.5 text-left hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2.5 transition-colors"
+              >
+                <ArrowDownToLine className="w-4 h-4 text-slate-400" />
+                <span>Send to Back</span>
+              </button>
+
+              {selectedElements.length > 1 && (
+                <button
+                  onClick={() => {
+                    onGroup?.();
+                    setContextMenu(null);
+                  }}
+                  className="w-full px-3.5 py-1.5 text-left hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2.5 transition-colors"
+                >
+                  <Layers className="w-4 h-4 text-slate-400" />
+                  <span>Group Elements</span>
+                </button>
+              )}
+
+              <div className="h-[1px] bg-slate-100 dark:bg-slate-800 my-1" />
+
+              <button
+                onClick={() => {
+                  selectedElements.forEach((el) => onDeleteElement(el.id));
+                  setContextMenu(null);
+                }}
+                className="w-full px-3.5 py-2 text-left hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center gap-2.5 transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete</span>
+                <span className="ml-auto text-[10px] text-rose-400">Del</span>
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Floating Rich Text Input */}
       {textInput && (

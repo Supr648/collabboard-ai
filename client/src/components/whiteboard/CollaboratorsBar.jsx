@@ -12,6 +12,8 @@ import {
   History,
   Shield,
   Eye,
+  CheckSquare,
+  Bot,
 } from 'lucide-react';
 import { getInitials } from '../../utils/formatters';
 
@@ -24,6 +26,8 @@ const CollaboratorsBar = ({
   onOpenAi,
   onOpenTemplates,
   onOpenHistory,
+  onOpenTasks,
+  onOpenCopilot,
   isOwner = true,
   userRole = 'owner', // 'owner' | 'editor' | 'viewer'
   isPresentation = false,
@@ -125,13 +129,33 @@ const CollaboratorsBar = ({
 
       {/* Right side: AI Assistant, Templates, Collaborator Stack, Share */}
       <div className="flex items-center gap-2 pointer-events-auto">
-        {/* AI Assistant Button (Glowing Primary) */}
+        {/* Tasks / Kanban Button */}
+        <button
+          onClick={onOpenTasks}
+          title="Project Tasks & Kanban Board"
+          className="glass-panel px-3 py-2 rounded-2xl shadow-lg border border-slate-200/90 dark:border-slate-700/90 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors hidden md:flex items-center gap-1.5 text-xs font-semibold cursor-pointer"
+        >
+          <CheckSquare className="w-3.5 h-3.5 text-emerald-500" />
+          <span>Tasks</span>
+        </button>
+
+        {/* AI Copilot Drawer Button */}
+        <button
+          onClick={onOpenCopilot}
+          title="AI Copilot Interactive Chat & Commands"
+          className="glass-panel px-3 py-2 rounded-2xl shadow-lg border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors flex items-center gap-1.5 text-xs font-bold cursor-pointer"
+        >
+          <Bot className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Copilot</span>
+        </button>
+
+        {/* AI Assistant Modal Button (Glowing Primary) */}
         <button
           onClick={onOpenAi}
           className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white text-xs font-bold shadow-lg shadow-purple-500/25 transition-all hover:scale-105 active:scale-95 animate-pulse"
         >
           <Sparkles className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">AI Assistant</span>
+          <span className="hidden sm:inline">AI Studio</span>
         </button>
 
         {/* Templates Button */}

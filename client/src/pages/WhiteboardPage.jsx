@@ -14,6 +14,8 @@ import Minimap from '../components/whiteboard/Minimap';
 import LiveReactions from '../components/whiteboard/LiveReactions';
 import CommentsOverlay from '../components/whiteboard/CommentsOverlay';
 import AiAssistantModal from '../components/whiteboard/AiAssistantModal';
+import AiCopilotDrawer from '../components/whiteboard/AiCopilotDrawer';
+import TasksModal from '../components/whiteboard/TasksModal';
 import TemplatesModal from '../components/dashboard/TemplatesModal';
 import VersionHistoryModal from '../components/whiteboard/VersionHistoryModal';
 import ShareModal from '../components/whiteboard/ShareModal';
@@ -25,7 +27,23 @@ import {
   exportBoardAsPDF,
   generateThumbnail,
   getElementBoundingBox,
+  bringToFront,
+  sendToBack,
+  bringForward,
+  sendBackward,
+  toggleLockElements,
+  groupElements,
+  ungroupElements,
 } from '../utils/canvasUtils';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Maximize2,
+  Minimize2,
+  Radio,
+  Presentation,
+  CheckSquare,
+} from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 const WhiteboardPage = () => {
@@ -73,13 +91,17 @@ const WhiteboardPage = () => {
   const [historyStep, setHistoryStep] = useState(0);
   const [versionCheckpoints, setVersionCheckpoints] = useState([]);
 
-  // Modals
+  // Modals & Panels
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [clearModalOpen, setClearModalOpen] = useState(false);
   const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [aiCopilotOpen, setAiCopilotOpen] = useState(false);
+  const [tasksModalOpen, setTasksModalOpen] = useState(false);
+  const [taskToConvert, setTaskToConvert] = useState(null);
   const [templatesModalOpen, setTemplatesModalOpen] = useState(false);
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const [toast, setToast] = useState({ message: '', type: 'info' });
+  const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
 
   const autoSaveTimerRef = useRef(null);
 
@@ -114,6 +136,8 @@ const WhiteboardPage = () => {
     participants,
     cursors,
     remoteLiveStroke,
+    remoteLaserTrail,
+    remotePresentationSlide,
     incomingReactions,
     comments,
     typingUsers,
@@ -127,6 +151,8 @@ const WhiteboardPage = () => {
     emitCommentAdd,
     emitCommentResolve,
     emitTyping,
+    emitLaserPointer,
+    emitPresentationSlide,
   } = useCollaboration({
     roomId,
     user,
@@ -378,6 +404,161 @@ const WhiteboardPage = () => {
     setSelectedElements(duplicated);
   }, [selectedElements, historyStep, emitElementAdd, triggerAutoSave, isReadOnly]);
 
+  // Presentation frames
+  const frames = elements.filter((el) => el.type === 'frame');
+
+  // Presentation slide navigator
+  const navigateToFrame = useCallback(
+    (index) => {
+      if (frames.length === 0) return;
+      const boundedIndex = Math.max(0, Math.min(frames.length - 1, index));
+      setCurrentFrameIndex(boundedIndex);
+      const target = frames[boundedIndex];
+      if (target) {
+        const minX = Math.min(target.x1, target.x2);
+        const maxX = Math.max(target.x1, target.x2);
+        const minY = Math.min(target.y1, target.y2);
+        const maxY = Math.max(target.y1, target.y2);
+        const w = Math.max(120, maxX - minX);
+        const h = Math.max(120, maxY - minY);
+        const scale = Math.min(Math.min((window.innerWidth * 0.82) / w, (window.innerHeight * 0.82) / h), 2.0);
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+        setZoom(scale);
+        setPan({
+          x: window.innerWidth / 2 - centerX * scale,
+          y: window.innerHeight / 2 - centerY * scale,
+        });
+        emitPresentationSlide(boundedIndex);
+      }
+    },
+    [frames, emitPresentationSlide]
+  );
+
+  // Sync when presenter moves slide
+  useEffect(() => {
+    if (remotePresentationSlide && typeof remotePresentationSlide.frameIndex === 'number') {
+      const idx = remotePresentationSlide.frameIndex;
+      setCurrentFrameIndex(idx);
+      if (!isPresentation) setIsPresentation(true);
+      const target = frames[idx];
+      if (target) {
+        const minX = Math.min(target.x1, target.x2);
+        const maxX = Math.max(target.x1, target.x2);
+        const minY = Math.min(target.y1, target.y2);
+        const maxY = Math.max(target.y1, target.y2);
+        const w = Math.max(120, maxX - minX);
+        const h = Math.max(120, maxY - minY);
+        const scale = Math.min(Math.min((window.innerWidth * 0.82) / w, (window.innerHeight * 0.82) / h), 2.0);
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+        setZoom(scale);
+        setPan({
+          x: window.innerWidth / 2 - centerX * scale,
+          y: window.innerHeight / 2 - centerY * scale,
+        });
+      }
+    }
+  }, [remotePresentationSlide, frames, isPresentation]);
+
+  // Object Layering
+  const handleBringToFront = useCallback(
+    (element) => {
+      if (isReadOnly) return;
+      const ids = element ? [element.id] : selectedElements.map((e) => e.id);
+      if (ids.length === 0) return;
+      setElements((prev) => {
+        const next = bringToFront(prev, ids);
+        emitCanvasSync(next, 'bring_to_front');
+        triggerAutoSave(next);
+        return next;
+      });
+    },
+    [selectedElements, emitCanvasSync, triggerAutoSave, isReadOnly]
+  );
+
+  const handleSendToBack = useCallback(
+    (element) => {
+      if (isReadOnly) return;
+      const ids = element ? [element.id] : selectedElements.map((e) => e.id);
+      if (ids.length === 0) return;
+      setElements((prev) => {
+        const next = sendToBack(prev, ids);
+        emitCanvasSync(next, 'send_to_back');
+        triggerAutoSave(next);
+        return next;
+      });
+    },
+    [selectedElements, emitCanvasSync, triggerAutoSave, isReadOnly]
+  );
+
+  const handleToggleLock = useCallback(
+    (element) => {
+      if (isReadOnly) return;
+      const ids = element ? [element.id] : selectedElements.map((e) => e.id);
+      if (ids.length === 0) return;
+      setElements((prev) => {
+        const next = toggleLockElements(prev, ids);
+        emitCanvasSync(next, 'toggle_lock');
+        triggerAutoSave(next);
+        return next;
+      });
+      setToast({ message: 'Toggled lock state', type: 'info' });
+    },
+    [selectedElements, emitCanvasSync, triggerAutoSave, isReadOnly]
+  );
+
+  const handleGroup = useCallback(() => {
+    if (isReadOnly || selectedElements.length < 2) return;
+    const ids = selectedElements.map((e) => e.id);
+    setElements((prev) => {
+      const next = groupElements(prev, ids);
+      emitCanvasSync(next, 'group');
+      triggerAutoSave(next);
+      return next;
+    });
+    setToast({ message: `Grouped ${selectedElements.length} elements`, type: 'success' });
+  }, [selectedElements, emitCanvasSync, triggerAutoSave, isReadOnly]);
+
+  const handleUngroup = useCallback(() => {
+    if (isReadOnly || selectedElements.length === 0) return;
+    const ids = selectedElements.map((e) => e.id);
+    setElements((prev) => {
+      const next = ungroupElements(prev, ids);
+      emitCanvasSync(next, 'ungroup');
+      triggerAutoSave(next);
+      return next;
+    });
+    setToast({ message: 'Ungrouped elements', type: 'info' });
+  }, [selectedElements, emitCanvasSync, triggerAutoSave, isReadOnly]);
+
+  // Convert Sticky Note / Canvas Element to Actionable Kanban Task
+  const handleConvertToTask = useCallback((element) => {
+    const text = element.text || element.title || `${element.type.toUpperCase()} Item`;
+    setTaskToConvert({
+      title: text.length > 50 ? text.slice(0, 50) + '...' : text,
+      description: `Task created from whiteboard element (type: ${element.type}, ID: ${element.id})`,
+      originElementId: element.id,
+      priority: 'medium',
+      status: 'backlog',
+    });
+    setTasksModalOpen(true);
+  }, []);
+
+  // AI Copilot Mutation Handler (Natural Language Commands)
+  const handleUpdateCanvasElements = useCallback(
+    (nextElements) => {
+      if (isReadOnly || !Array.isArray(nextElements)) return;
+      setElements(nextElements);
+      setHistory((prevHist) => [...prevHist.slice(0, historyStep + 1), nextElements]);
+      setHistoryStep((prevStep) => prevStep + 1);
+      emitCanvasSync(nextElements, 'ai_command_mutate');
+      triggerAutoSave(nextElements);
+      setToast({ message: 'Canvas mutated by AI Copilot!', type: 'success' });
+    },
+    [historyStep, emitCanvasSync, triggerAutoSave, isReadOnly]
+  );
+
   // Import Image
   const handleImportImage = (base64Data) => {
     if (isReadOnly) return;
@@ -558,6 +739,8 @@ const WhiteboardPage = () => {
         onOpenAi={() => setAiModalOpen(true)}
         onOpenTemplates={() => setTemplatesModalOpen(true)}
         onOpenHistory={() => setHistoryModalOpen(true)}
+        onOpenTasks={() => setTasksModalOpen(true)}
+        onOpenCopilot={() => setAiCopilotOpen(true)}
         isOwner={isOwner}
         userRole={userRole}
         isPresentation={isPresentation}
@@ -617,6 +800,15 @@ const WhiteboardPage = () => {
         onCursorMove={emitCursorMove}
         isDark={isDark}
         isReadOnly={isReadOnly}
+        onConvertToTask={handleConvertToTask}
+        onLaserMove={emitLaserPointer}
+        remoteLaserTrail={remoteLaserTrail}
+        onBringToFront={handleBringToFront}
+        onSendToBack={handleSendToBack}
+        onToggleLock={handleToggleLock}
+        onGroup={handleGroup}
+        onUngroup={handleUngroup}
+        onDuplicateSelected={handleDuplicateSelected}
       />
 
       {/* Pinned Comments on Canvas */}
@@ -660,7 +852,10 @@ const WhiteboardPage = () => {
           onFitToScreen={handleFitToScreen}
           snapToGrid={snapToGrid}
           onToggleSnapToGrid={() => setSnapToGrid(!snapToGrid)}
-          onTogglePresentation={() => setIsPresentation(true)}
+          onTogglePresentation={() => {
+            setIsPresentation(true);
+            if (frames.length > 0) navigateToFrame(0);
+          }}
           onClearCanvas={() => setClearModalOpen(true)}
           onExportPNG={handleExportPNG}
           onExportSVG={handleExportSVG}
@@ -668,15 +863,79 @@ const WhiteboardPage = () => {
         />
       )}
 
-      {/* Presentation Mode Exit Floating Pill */}
+      {/* Presentation Mode Slideshow Header */}
       {isPresentation && (
-        <div className="fixed top-6 right-6 z-50">
-          <button
-            onClick={() => setIsPresentation(false)}
-            className="glass-panel px-4 py-2 rounded-2xl shadow-2xl border border-purple-500 bg-purple-600/90 text-white text-xs font-bold hover:scale-105 transition-all"
-          >
-            Exit Presentation (Esc)
-          </button>
+        <div className="fixed top-5 inset-x-0 z-50 flex items-center justify-center pointer-events-none">
+          <div className="glass-panel px-4 py-2.5 rounded-2xl shadow-2xl border border-purple-500/50 bg-slate-900/90 backdrop-blur-xl text-white flex items-center gap-3 pointer-events-auto">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-purple-400">
+              <Presentation className="w-4 h-4 text-purple-400 animate-pulse" />
+              <span>Presentation</span>
+            </div>
+
+            {frames.length > 0 ? (
+              <div className="flex items-center gap-2 border-l border-r border-slate-700/80 px-3">
+                <button
+                  onClick={() => navigateToFrame(currentFrameIndex - 1)}
+                  disabled={currentFrameIndex === 0}
+                  className="p-1.5 rounded-xl hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  title="Previous Slide"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <div className="flex flex-col items-center">
+                  <span className="text-xs font-bold truncate max-w-[150px]">
+                    {frames[currentFrameIndex]?.text || frames[currentFrameIndex]?.title || `Frame ${currentFrameIndex + 1}`}
+                  </span>
+                  <span className="text-[10px] text-slate-400">
+                    {currentFrameIndex + 1} of {frames.length}
+                  </span>
+                </div>
+                <button
+                  onClick={() => navigateToFrame(currentFrameIndex + 1)}
+                  disabled={currentFrameIndex === frames.length - 1}
+                  className="p-1.5 rounded-xl hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  title="Next Slide"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => {
+                    emitPresentationSlide(currentFrameIndex);
+                    setToast({ message: `Synced Slide ${currentFrameIndex + 1} to all collaborators!`, type: 'success' });
+                  }}
+                  className="p-1.5 rounded-xl hover:bg-purple-900/50 text-purple-300 transition-colors ml-1"
+                  title="Broadcast slide view to all participants"
+                >
+                  <Radio className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <span className="text-xs text-slate-400 px-2 italic">
+                No frames defined. Use Frame tool to add slides.
+              </span>
+            )}
+
+            <button
+              onClick={() => {
+                if (!document.fullscreenElement) {
+                  document.documentElement.requestFullscreen().catch(() => {});
+                } else {
+                  document.exitFullscreen().catch(() => {});
+                }
+              }}
+              className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-300 transition-colors"
+              title="Toggle Fullscreen"
+            >
+              <Maximize2 className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={() => setIsPresentation(false)}
+              className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-md shadow-purple-500/20"
+            >
+              Exit (Esc)
+            </button>
+          </div>
         </div>
       )}
 
@@ -687,6 +946,28 @@ const WhiteboardPage = () => {
         onInsertElements={handleInsertElements}
         currentElements={elements}
         boardTitle={title}
+      />
+
+      {/* Project Management & Kanban Tasks Modal */}
+      <TasksModal
+        isOpen={tasksModalOpen}
+        onClose={() => {
+          setTasksModalOpen(false);
+          setTaskToConvert(null);
+        }}
+        boardId={board?._id || board?.id || roomId}
+        initialTaskData={taskToConvert}
+        onClearInitial={() => setTaskToConvert(null)}
+      />
+
+      {/* AI Copilot Interactive Chat & Command Drawer */}
+      <AiCopilotDrawer
+        isOpen={aiCopilotOpen}
+        onClose={() => setAiCopilotOpen(false)}
+        elements={elements}
+        selectedElements={selectedElements}
+        onApplyElements={handleInsertElements}
+        onUpdateCanvasElements={handleUpdateCanvasElements}
       />
 
       {/* Templates Blueprint Modal */}

@@ -8,9 +8,13 @@ import {
   Square,
   Circle,
   Triangle,
+  Diamond,
+  Hexagon,
   Minus,
   MoveRight,
   Type,
+  Frame,
+  Sparkles,
   Image as ImageIcon,
 } from 'lucide-react';
 
@@ -18,13 +22,17 @@ const TOOLS = [
   { id: 'select', label: 'Select & Move', icon: MousePointer, shortcut: 'V' },
   { id: 'pen', label: 'Freehand Pen', icon: Pencil, shortcut: 'P' },
   { id: 'highlighter', label: 'Highlighter', icon: Highlighter, shortcut: 'H' },
+  { id: 'laser', label: 'Neon Laser Pointer', icon: Sparkles, shortcut: 'K' },
   { id: 'sticky', label: 'Sticky Note', icon: StickyNote, shortcut: 'S' },
   { id: 'rectangle', label: 'Rectangle', icon: Square, shortcut: 'R' },
   { id: 'circle', label: 'Circle / Oval', icon: Circle, shortcut: 'C' },
+  { id: 'diamond', label: 'Diamond / Decision', icon: Diamond, shortcut: 'X' },
   { id: 'triangle', label: 'Triangle', icon: Triangle, shortcut: 'D' },
+  { id: 'polygon', label: 'Polygon / Hexagon', icon: Hexagon, shortcut: 'G' },
   { id: 'line', label: 'Line', icon: Minus, shortcut: 'L' },
-  { id: 'arrow', label: 'Arrow', icon: MoveRight, shortcut: 'A' },
+  { id: 'arrow', label: 'Connector Arrow', icon: MoveRight, shortcut: 'A' },
   { id: 'text', label: 'Rich Text', icon: Type, shortcut: 'T' },
+  { id: 'frame', label: 'Presentation Frame', icon: Frame, shortcut: 'F' },
   { id: 'eraser', label: 'Precision Eraser', icon: Eraser, shortcut: 'E' },
 ];
 

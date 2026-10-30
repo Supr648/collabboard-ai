@@ -8,6 +8,7 @@ import { connectDB } from './config/db.js';
 import authRoutes from './routes/authRoutes.js';
 import whiteboardRoutes from './routes/whiteboardRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
+import taskRoutes from './routes/taskRoutes.js';
 import { setupSocketHandlers } from './sockets/socketHandler.js';
 import { notFound, errorHandler } from './middleware/errorHandler.js';
 
@@ -86,6 +87,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/whiteboards', whiteboardRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/tasks', taskRoutes);
 
 // Error Handling Middlewares
 app.use(notFound);

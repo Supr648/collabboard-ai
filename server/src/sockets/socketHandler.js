@@ -141,6 +141,42 @@ export const setupSocketHandlers = (io) => {
       });
     });
 
+    // Project Management Task synchronization
+    socket.on('task-create', ({ roomId, task }) => {
+      if (!roomId || !task) return;
+      socket.to(roomId).emit('remote-task-create', task);
+    });
+
+    socket.on('task-update', ({ roomId, task }) => {
+      if (!roomId || !task) return;
+      socket.to(roomId).emit('remote-task-update', task);
+    });
+
+    socket.on('task-delete', ({ roomId, taskId }) => {
+      if (!roomId || !taskId) return;
+      socket.to(roomId).emit('remote-task-delete', { taskId });
+    });
+
+    // Real-Time Laser Pointer Trail
+    socket.on('laser-pointer', ({ roomId, x, y }) => {
+      if (!roomId) return;
+      socket.to(roomId).emit('remote-laser-pointer', {
+        x,
+        y,
+        user: socket.data.participant,
+        time: Date.now(),
+      });
+    });
+
+    // Synchronized Presentation Slideshow
+    socket.on('presentation-slide', ({ roomId, frameIndex }) => {
+      if (!roomId || typeof frameIndex !== 'number') return;
+      socket.to(roomId).emit('remote-presentation-slide', {
+        frameIndex,
+        by: socket.data.participant?.name || 'Presenter',
+      });
+    });
+
     // Explicit leave room
     socket.on('leave-room', () => {
       handleDisconnectOrLeave(socket, io);

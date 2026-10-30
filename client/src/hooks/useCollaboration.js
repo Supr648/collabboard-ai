@@ -18,6 +18,8 @@ export const useCollaboration = ({
   const [incomingReactions, setIncomingReactions] = useState([]);
   const [comments, setComments] = useState([]);
   const [typingUsers, setTypingUsers] = useState({});
+  const [remoteLaserTrail, setRemoteLaserTrail] = useState([]);
+  const [remotePresentationSlide, setRemotePresentationSlide] = useState(null);
 
   const lastCursorEmitRef = useRef(0);
   const socketRef = useRef(null);
@@ -135,6 +137,19 @@ export const useCollaboration = ({
       });
     };
 
+    // Laser pointer listener
+    const onRemoteLaser = (data) => {
+      setRemoteLaserTrail((prev) => [...prev.slice(-30), data]);
+      setTimeout(() => {
+        setRemoteLaserTrail((prev) => prev.filter((p) => p.time !== data.time));
+      }, 1200);
+    };
+
+    // Synchronized presentation slide listener
+    const onRemoteSlide = (data) => {
+      setRemotePresentationSlide(data);
+    };
+
     // Attach listeners
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
@@ -151,6 +166,8 @@ export const useCollaboration = ({
     socket.on('comment-sync', onCommentSync);
     socket.on('comment-resolved', onCommentResolved);
     socket.on('user-typing', onUserTyping);
+    socket.on('remote-laser-pointer', onRemoteLaser);
+    socket.on('remote-presentation-slide', onRemoteSlide);
 
     // Prune stale cursors every 5s
     const pruneInterval = setInterval(() => {
@@ -305,10 +322,62 @@ export const useCollaboration = ({
     [roomId]
   );
 
+  const emitLaserPointer = useCallback(
+    (x, y) => {
+      const socket = socketRef.current || getSocket();
+      if (socket && socket.connected) {
+        socket.emit('laser-pointer', { roomId, x, y });
+      }
+    },
+    [roomId]
+  );
+
+  const emitPresentationSlide = useCallback(
+    (frameIndex) => {
+      const socket = socketRef.current || getSocket();
+      if (socket && socket.connected) {
+        socket.emit('presentation-slide', { roomId, frameIndex });
+      }
+    },
+    [roomId]
+  );
+
+  const emitTaskCreate = useCallback(
+    (task) => {
+      const socket = socketRef.current || getSocket();
+      if (socket && socket.connected) {
+        socket.emit('task-create', { roomId, task });
+      }
+    },
+    [roomId]
+  );
+
+  const emitTaskUpdate = useCallback(
+    (task) => {
+      const socket = socketRef.current || getSocket();
+      if (socket && socket.connected) {
+        socket.emit('task-update', { roomId, task });
+      }
+    },
+    [roomId]
+  );
+
+  const emitTaskDelete = useCallback(
+    (taskId) => {
+      const socket = socketRef.current || getSocket();
+      if (socket && socket.connected) {
+        socket.emit('task-delete', { roomId, taskId });
+      }
+    },
+    [roomId]
+  );
+
   return {
     participants,
     cursors,
     remoteLiveStroke,
+    remoteLaserTrail,
+    remotePresentationSlide,
     connectionStatus,
     incomingReactions,
     comments,
@@ -323,5 +392,10 @@ export const useCollaboration = ({
     emitCommentAdd,
     emitCommentResolve,
     emitTyping,
+    emitLaserPointer,
+    emitPresentationSlide,
+    emitTaskCreate,
+    emitTaskUpdate,
+    emitTaskDelete,
   };
 };

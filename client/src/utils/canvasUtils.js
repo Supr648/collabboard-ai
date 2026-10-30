@@ -232,6 +232,105 @@ export const renderElement = (ctx, el, imageCache = {}) => {
       break;
     }
 
+    case 'diamond': {
+      const minX = Math.min(el.x1, el.x2);
+      const maxX = Math.max(el.x1, el.x2);
+      const minY = Math.min(el.y1, el.y2);
+      const maxY = Math.max(el.y1, el.y2);
+      const midX = (minX + maxX) / 2;
+      const midY = (minY + maxY) / 2;
+
+      ctx.beginPath();
+      ctx.moveTo(midX, minY);
+      ctx.lineTo(maxX, midY);
+      ctx.lineTo(midX, maxY);
+      ctx.lineTo(minX, midY);
+      ctx.closePath();
+
+      if (el.fillColor && el.fillColor !== 'transparent') {
+        ctx.fill();
+      }
+      ctx.stroke();
+
+      if (el.text) {
+        ctx.font = `${el.bold ? 'bold ' : ''}${el.fontSize || 14}px sans-serif`;
+        ctx.fillStyle = el.strokeColor || '#1e293b';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(el.text, midX, midY);
+      }
+      break;
+    }
+
+    case 'polygon': {
+      const minX = Math.min(el.x1, el.x2);
+      const maxX = Math.max(el.x1, el.x2);
+      const minY = Math.min(el.y1, el.y2);
+      const maxY = Math.max(el.y1, el.y2);
+      const cx = (minX + maxX) / 2;
+      const cy = (minY + maxY) / 2;
+      const rx = Math.abs(maxX - minX) / 2;
+      const ry = Math.abs(maxY - minY) / 2;
+      const sides = el.sides || 6; // Regular hexagon
+
+      ctx.beginPath();
+      for (let i = 0; i < sides; i++) {
+        const angle = (i * 2 * Math.PI) / sides - Math.PI / 2;
+        const x = cx + rx * Math.cos(angle);
+        const y = cy + ry * Math.sin(angle);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+
+      if (el.fillColor && el.fillColor !== 'transparent') {
+        ctx.fill();
+      }
+      ctx.stroke();
+      break;
+    }
+
+    case 'frame': {
+      const minX = Math.min(el.x1, el.x2);
+      const maxX = Math.max(el.x1, el.x2);
+      const minY = Math.min(el.y1, el.y2);
+      const maxY = Math.max(el.y1, el.y2);
+      const w = Math.max(160, maxX - minX);
+      const h = Math.max(120, maxY - minY);
+
+      ctx.save();
+      ctx.strokeStyle = el.strokeColor || '#6366f1';
+      ctx.fillStyle = el.fillColor || 'rgba(99, 102, 241, 0.04)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 6]);
+
+      // Frame box
+      if (ctx.roundRect) ctx.roundRect(minX, minY, w, h, 12);
+      else ctx.rect(minX, minY, w, h);
+      ctx.fill();
+      ctx.stroke();
+
+      // Top title pill
+      ctx.setLineDash([]);
+      ctx.fillStyle = el.strokeColor || '#6366f1';
+      const label = el.title || el.text || 'Presentation Frame';
+      ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      const textMetrics = ctx.measureText(label);
+      const pillW = Math.max(90, textMetrics.width + 24);
+      const pillH = 22;
+
+      if (ctx.roundRect) ctx.roundRect(minX, minY - pillH, pillW, pillH, [6, 6, 0, 0]);
+      else ctx.rect(minX, minY - pillH, pillW, pillH);
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, minX + 8, minY - pillH / 2);
+      ctx.restore();
+      break;
+    }
+
     case 'image': {
       const minX = Math.min(el.x1, el.x2);
       const minY = Math.min(el.y1, el.y2);
@@ -260,6 +359,24 @@ export const renderElement = (ctx, el, imageCache = {}) => {
 
     default:
       break;
+  }
+
+  // Draw Lock Badge if element is locked
+  if (el.isLocked) {
+    const box = getElementBoundingBox(el);
+    if (box) {
+      ctx.save();
+      ctx.fillStyle = '#ef4444';
+      ctx.beginPath();
+      ctx.arc(box.maxX - 10, box.minY + 10, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '9px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('🔒', box.maxX - 10, box.minY + 10);
+      ctx.restore();
+    }
   }
 
   ctx.restore();
@@ -390,7 +507,10 @@ export const isPointNearElement = (px, py, el, threshold = 10) => {
 
     case 'rectangle':
     case 'sticky':
-    case 'image': {
+    case 'image':
+    case 'diamond':
+    case 'polygon':
+    case 'frame': {
       const minX = Math.min(el.x1, el.x2);
       const maxX = Math.max(el.x1, el.x2);
       const minY = Math.min(el.y1, el.y2);
@@ -584,6 +704,20 @@ export const exportBoardAsSVG = (elements, title = 'whiteboard', isDark = false)
       const rx = Math.abs(el.x2 - el.x1) / 2;
       const ry = Math.abs(el.y2 - el.y1) / 2;
       svgContent += `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" stroke="${stroke}" stroke-width="${sw}" fill="${fill}" opacity="${op}"/>\n`;
+    } else if (el.type === 'diamond') {
+      const minX = Math.min(el.x1, el.x2);
+      const maxX = Math.max(el.x1, el.x2);
+      const minY = Math.min(el.y1, el.y2);
+      const maxY = Math.max(el.y1, el.y2);
+      const midX = (minX + maxX) / 2;
+      const midY = (minY + maxY) / 2;
+      svgContent += `<polygon points="${midX},${minY} ${maxX},${midY} ${midX},${maxY} ${minX},${midY}" stroke="${stroke}" stroke-width="${sw}" fill="${fill}" opacity="${op}"/>\n`;
+    } else if (el.type === 'frame') {
+      const x = Math.min(el.x1, el.x2);
+      const y = Math.min(el.y1, el.y2);
+      const w = Math.abs(el.x2 - el.x1);
+      const h = Math.abs(el.y2 - el.y1);
+      svgContent += `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="12" stroke="${stroke}" stroke-width="${sw}" stroke-dasharray="6,6" fill="${fill}" opacity="${op}"/>\n`;
     } else if (el.type === 'text') {
       svgContent += `<text x="${el.x}" y="${el.y + (el.fontSize || 20)}" font-size="${el.fontSize || 20}" font-family="sans-serif" fill="${stroke}">${el.text}</text>\n`;
     }
@@ -647,3 +781,163 @@ export const exportBoardAsPDF = (elements, title = 'whiteboard', isDark = false)
   pdf.addImage(imgData, 'JPEG', 0, 0, width, height);
   pdf.save(`${title.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${Date.now()}.pdf`);
 };
+
+// Calculate 4 magnetic anchor points for shapes (top, bottom, left, right)
+export const getShapeAnchorPoints = (el) => {
+  const box = getElementBoundingBox(el);
+  if (!box) return null;
+  return {
+    top: { x: (box.minX + box.maxX) / 2, y: box.minY, name: 'top' },
+    bottom: { x: (box.minX + box.maxX) / 2, y: box.maxY, name: 'bottom' },
+    left: { x: box.minX, y: (box.minY + box.maxY) / 2, name: 'left' },
+    right: { x: box.maxX, y: (box.minY + box.maxY) / 2, name: 'right' },
+  };
+};
+
+// Find nearest magnetic anchor point across elements
+export const findNearestAnchorPoint = (px, py, elements, excludeId = null, threshold = 28) => {
+  let nearest = null;
+  let minDist = threshold;
+
+  elements.forEach((el) => {
+    if (el.id === excludeId || el.type === 'pen' || el.type === 'highlighter' || el.type === 'line' || el.type === 'arrow') return;
+    const anchors = getShapeAnchorPoints(el);
+    if (!anchors) return;
+
+    Object.values(anchors).forEach((anchor) => {
+      const dist = Math.hypot(px - anchor.x, py - anchor.y);
+      if (dist < minDist) {
+        minDist = dist;
+        nearest = { ...anchor, elementId: el.id };
+      }
+    });
+  });
+
+  return nearest;
+};
+
+// Object Layering: Bring to Front
+export const bringToFront = (elements, selectedIds = []) => {
+  if (!elements || selectedIds.length === 0) return elements;
+  const idSet = new Set(selectedIds);
+  const unselected = elements.filter((el) => !idSet.has(el.id));
+  const selected = elements.filter((el) => idSet.has(el.id));
+  return [...unselected, ...selected];
+};
+
+// Object Layering: Send to Back
+export const sendToBack = (elements, selectedIds = []) => {
+  if (!elements || selectedIds.length === 0) return elements;
+  const idSet = new Set(selectedIds);
+  const unselected = elements.filter((el) => !idSet.has(el.id));
+  const selected = elements.filter((el) => idSet.has(el.id));
+  return [...selected, ...unselected];
+};
+
+// Object Layering: Bring Forward
+export const bringForward = (elements, selectedIds = []) => {
+  if (!elements || selectedIds.length === 0) return elements;
+  const result = [...elements];
+  for (let i = result.length - 2; i >= 0; i--) {
+    if (selectedIds.includes(result[i].id) && !selectedIds.includes(result[i + 1].id)) {
+      const temp = result[i];
+      result[i] = result[i + 1];
+      result[i + 1] = temp;
+    }
+  }
+  return result;
+};
+
+// Object Layering: Send Backward
+export const sendBackward = (elements, selectedIds = []) => {
+  if (!elements || selectedIds.length === 0) return elements;
+  const result = [...elements];
+  for (let i = 1; i < result.length; i++) {
+    if (selectedIds.includes(result[i].id) && !selectedIds.includes(result[i - 1].id)) {
+      const temp = result[i];
+      result[i] = result[i - 1];
+      result[i - 1] = temp;
+    }
+  }
+  return result;
+};
+
+// Toggle Lock/Unlock on Elements
+export const toggleLockElements = (elements, selectedIds = []) => {
+  if (!elements || selectedIds.length === 0) return elements;
+  const idSet = new Set(selectedIds);
+  const anyUnlocked = elements.some((el) => idSet.has(el.id) && !el.isLocked);
+  return elements.map((el) => {
+    if (idSet.has(el.id)) {
+      return { ...el, isLocked: anyUnlocked };
+    }
+    return el;
+  });
+};
+
+// Group Selected Elements
+export const groupElements = (elements, selectedIds = []) => {
+  if (!elements || selectedIds.length < 2) return elements;
+  const newGroupId = `group_${Date.now()}`;
+  const idSet = new Set(selectedIds);
+  return elements.map((el) => {
+    if (idSet.has(el.id)) {
+      return { ...el, groupId: newGroupId };
+    }
+    return el;
+  });
+};
+
+// Ungroup Selected Elements
+export const ungroupElements = (elements, selectedIds = []) => {
+  if (!elements || selectedIds.length === 0) return elements;
+  const idSet = new Set(selectedIds);
+  return elements.map((el) => {
+    if (idSet.has(el.id)) {
+      const copy = { ...el };
+      delete copy.groupId;
+      return copy;
+    }
+    return el;
+  });
+};
+
+// Laser Pointer Trail Renderer
+export const renderLaserTrail = (ctx, points = []) => {
+  if (!points || points.length < 2) return;
+  const now = Date.now();
+  const maxAge = 1200; // 1.2s decay
+
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  for (let i = 1; i < points.length; i++) {
+    const age = now - points[i].time;
+    if (age > maxAge) continue;
+    const progress = 1 - age / maxAge;
+    ctx.lineWidth = Math.max(2, 7 * progress);
+    ctx.strokeStyle = `rgba(244, 63, 94, ${progress})`;
+    ctx.shadowColor = '#fb7185';
+    ctx.shadowBlur = 10 * progress;
+
+    ctx.beginPath();
+    ctx.moveTo(points[i - 1].x, points[i - 1].y);
+    ctx.lineTo(points[i].x, points[i].y);
+    ctx.stroke();
+  }
+
+  // Draw glowing head
+  const latest = points[points.length - 1];
+  if (latest && now - latest.time < maxAge) {
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = '#f43f5e';
+    ctx.shadowBlur = 14;
+    ctx.beginPath();
+    ctx.arc(latest.x, latest.y, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+};
+

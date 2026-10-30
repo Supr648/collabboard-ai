@@ -20,6 +20,7 @@ class MemoryStore {
   constructor() {
     this.users = new Map();
     this.whiteboards = new Map();
+    this.tasks = new Map();
     this.loadFromFile();
   }
 
@@ -34,7 +35,10 @@ class MemoryStore {
         if (Array.isArray(data.whiteboards)) {
           data.whiteboards.forEach((wb) => this.whiteboards.set(wb._id || wb.id, wb));
         }
-        console.log(`Loaded ${this.users.size} users and ${this.whiteboards.size} whiteboards from local cache store.`);
+        if (Array.isArray(data.tasks)) {
+          data.tasks.forEach((t) => this.tasks.set(t._id || t.id, t));
+        }
+        console.log(`Loaded ${this.users.size} users, ${this.whiteboards.size} whiteboards, and ${this.tasks.size} tasks from local cache store.`);
       }
     } catch (e) {
       console.warn('Local store read error, initialized with clean memory store:', e.message);
@@ -46,6 +50,7 @@ class MemoryStore {
       const data = {
         users: Array.from(this.users.values()),
         whiteboards: Array.from(this.whiteboards.values()),
+        tasks: Array.from(this.tasks.values()),
       };
       fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf-8');
     } catch (e) {
@@ -150,6 +155,59 @@ class MemoryStore {
     this.saveToFile();
     return res;
   }
+
+  // Task operations for Kanban Project Management
+  createTask(taskData) {
+    const id = taskData._id || 'task_' + Math.random().toString(36).substr(2, 9);
+    const task = {
+      _id: id,
+      id,
+      title: taskData.title || 'Untitled Task',
+      description: taskData.description || '',
+      status: taskData.status || 'backlog',
+      priority: taskData.priority || 'medium',
+      dueDate: taskData.dueDate || '',
+      boardId: taskData.boardId,
+      originElementId: taskData.originElementId || '',
+      assignedTo: taskData.assignedTo || 'Unassigned',
+      createdBy: taskData.createdBy || 'Collaborator',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    this.tasks.set(id, task);
+    this.saveToFile();
+    return task;
+  }
+
+  findTasksByBoardId(boardId) {
+    const list = [];
+    for (const task of this.tasks.values()) {
+      if (task.boardId === boardId) {
+        list.push(task);
+      }
+    }
+    return list;
+  }
+
+  updateTask(id, updates) {
+    const task = this.tasks.get(id);
+    if (!task) return null;
+    const updated = {
+      ...task,
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    };
+    this.tasks.set(id, updated);
+    this.saveToFile();
+    return updated;
+  }
+
+  deleteTask(id) {
+    const res = this.tasks.delete(id);
+    this.saveToFile();
+    return res;
+  }
 }
 
 export const memoryStore = new MemoryStore();
+

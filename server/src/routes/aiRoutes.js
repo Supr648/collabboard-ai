@@ -5,6 +5,10 @@ import {
   generateBrainstorming,
   summarizeBoard,
   explainDiagram,
+  generateMindMap,
+  executeCanvasCommand,
+  extractDocumentIntelligence,
+  critiqueBoard,
 } from '../controllers/aiController.js';
 import { optionalAuth } from '../middleware/auth.js';
 
@@ -15,5 +19,10 @@ router.post('/flowchart', optionalAuth, generateFlowchart);
 router.post('/brainstorm', optionalAuth, generateBrainstorming);
 router.post('/summarize', optionalAuth, summarizeBoard);
 router.post('/explain', optionalAuth, explainDiagram);
+router.post('/mindmap', optionalAuth, generateMindMap);
+router.post('/command', optionalAuth, executeCanvasCommand);
+router.post('/document-intelligence', optionalAuth, extractDocumentIntelligence);
+router.post('/critique', optionalAuth, critiqueBoard);
 
 export default router;
+

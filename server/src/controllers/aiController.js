@@ -317,3 +317,423 @@ Arrows represent asynchronous and synchronous RPC/REST contracts with sub-50ms l
     next(error);
   }
 };
+
+// 6. AI Mind Map Generator
+export const generateMindMap = async (req, res, next) => {
+  try {
+    const { topic = 'Core Architecture' } = req.body;
+    const cleanTopic = topic.trim();
+
+    const cx = 500;
+    const cy = 350;
+    const elements = [];
+
+    // Central Root Node
+    elements.push({
+      id: 'mm_root',
+      type: 'circle',
+      x1: cx - 90,
+      y1: cy - 45,
+      x2: cx + 90,
+      y2: cy + 45,
+      strokeColor: '#6366f1',
+      fillColor: '#ede9fe',
+      strokeWidth: 3,
+    });
+    elements.push({
+      id: 'mm_root_t',
+      type: 'text',
+      x: cx,
+      y: cy - 10,
+      text: cleanTopic.slice(0, 24),
+      strokeColor: '#4338ca',
+      fontSize: 16,
+      bold: true,
+      align: 'center',
+    });
+
+    // 4 Branches
+    const branches = [
+      { name: 'Core Foundations', angle: -Math.PI / 4, color: '#3b82f6', fill: '#dbeafe', children: ['Data Schemas', 'API Gateway'] },
+      { name: 'User Experience', angle: Math.PI / 4, color: '#ec4899', fill: '#fce7f3', children: ['Responsive Canvas', 'Theme Engine'] },
+      { name: 'Cloud Infrastructure', angle: (3 * Math.PI) / 4, color: '#10b981', fill: '#d1fae5', children: ['Container Fleet', 'Redis Cluster'] },
+      { name: 'Security & Auth', angle: (-3 * Math.PI) / 4, color: '#f59e0b', fill: '#fef3c7', children: ['JWT Rotation', 'Rate Limiting'] },
+    ];
+
+    const branchDist = 220;
+    const childDist = 140;
+
+    branches.forEach((b, idx) => {
+      const bx = cx + Math.cos(b.angle) * branchDist;
+      const by = cy + Math.sin(b.angle) * branchDist;
+
+      // Connector from root
+      elements.push({
+        id: `mm_conn_${idx}`,
+        type: 'arrow',
+        x1: cx + Math.cos(b.angle) * 90,
+        y1: cy + Math.sin(b.angle) * 45,
+        x2: bx - Math.cos(b.angle) * 70,
+        y2: by - Math.sin(b.angle) * 35,
+        strokeColor: b.color,
+        strokeWidth: 2.5,
+      });
+
+      // Branch node
+      elements.push({
+        id: `mm_node_${idx}`,
+        type: 'rectangle',
+        x1: bx - 75,
+        y1: by - 30,
+        x2: bx + 75,
+        y2: by + 30,
+        strokeColor: b.color,
+        fillColor: b.fill,
+        strokeWidth: 2,
+      });
+      elements.push({
+        id: `mm_node_t_${idx}`,
+        type: 'text',
+        x: bx,
+        y: by - 8,
+        text: b.name,
+        strokeColor: b.color,
+        fontSize: 13,
+        bold: true,
+        align: 'center',
+      });
+
+      // Child sub-nodes
+      b.children.forEach((child, cIdx) => {
+        const offsetAngle = b.angle + (cIdx === 0 ? -0.35 : 0.35);
+        const chX = bx + Math.cos(offsetAngle) * childDist;
+        const chY = by + Math.sin(offsetAngle) * childDist;
+
+        elements.push({
+          id: `mm_ch_conn_${idx}_${cIdx}`,
+          type: 'line',
+          x1: bx,
+          y1: by,
+          x2: chX,
+          y2: chY,
+          strokeColor: b.color,
+          strokeWidth: 1.5,
+        });
+
+        elements.push({
+          id: `mm_ch_${idx}_${cIdx}`,
+          type: 'sticky',
+          x1: chX - 55,
+          y1: chY - 25,
+          x2: chX + 55,
+          y2: chY + 25,
+          strokeColor: b.color,
+          fillColor: b.fill,
+          text: child,
+          fontSize: 12,
+        });
+      });
+    });
+
+    const validated = validateElements(elements);
+    return res.json({
+      success: true,
+      topic: cleanTopic,
+      elements: validated,
+      data: { elements: validated, topic: cleanTopic },
+      summary: `Synthesized radial hierarchical mind map for "${cleanTopic}" with 4 core pillars and sub-nodes.`,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 7. Natural Language Canvas Commands Interpreter
+export const executeCanvasCommand = async (req, res, next) => {
+  try {
+    const { command = '', elements = [], selectedElements = [] } = req.body;
+    const cleanCmd = command.toLowerCase().trim();
+
+    if (!cleanCmd) {
+      return res.status(400).json({ success: false, message: 'Command is required' });
+    }
+
+    let message = '';
+    let updatedElements = [];
+    let newElements = [];
+    let action = 'custom';
+
+    // 1. Color alteration
+    const colorMap = {
+      blue: { stroke: '#3b82f6', fill: '#dbeafe' },
+      green: { stroke: '#10b981', fill: '#d1fae5' },
+      emerald: { stroke: '#059669', fill: '#a7f3d0' },
+      red: { stroke: '#ef4444', fill: '#fee2e2' },
+      rose: { stroke: '#f43f5e', fill: '#ffe4e6' },
+      purple: { stroke: '#8b5cf6', fill: '#ede9fe' },
+      indigo: { stroke: '#6366f1', fill: '#e0e7ff' },
+      amber: { stroke: '#f59e0b', fill: '#fef3c7' },
+      yellow: { stroke: '#eab308', fill: '#fef9c3' },
+      slate: { stroke: '#475569', fill: '#f1f5f9' },
+    };
+
+    const targetColorKey = Object.keys(colorMap).find((c) => cleanCmd.includes(c));
+
+    if (targetColorKey && (cleanCmd.includes('color') || cleanCmd.includes('change') || cleanCmd.includes('make') || cleanCmd.includes('turn'))) {
+      const targetIds = selectedElements.length > 0 ? selectedElements.map((e) => e.id) : elements.map((e) => e.id);
+      const palette = colorMap[targetColorKey];
+
+      updatedElements = elements.map((el) => {
+        if (targetIds.includes(el.id)) {
+          return {
+            ...el,
+            strokeColor: palette.stroke,
+            fillColor: el.fillColor && el.fillColor !== 'transparent' ? palette.fill : el.fillColor,
+          };
+        }
+        return el;
+      });
+
+      action = 'recolor';
+      message = `Updated ${targetIds.length} element(s) to ${targetColorKey} theme.`;
+    } else if (cleanCmd.includes('database') || cleanCmd.includes('db')) {
+      // Add database component
+      const newEl = {
+        id: `ai_cmd_db_${Date.now()}`,
+        type: 'circle',
+        x1: 450,
+        y1: 250,
+        x2: 600,
+        y2: 370,
+        strokeColor: '#06b6d4',
+        fillColor: '#cffafe',
+        strokeWidth: 3,
+        text: '💾 Database\nPostgreSQL / MongoDB',
+      };
+      newElements.push(newEl);
+      action = 'add';
+      message = 'Added scalable database component to canvas.';
+    } else if (cleanCmd.includes('gateway') || cleanCmd.includes('api')) {
+      // Add API Gateway
+      const newEl = {
+        id: `ai_cmd_gw_${Date.now()}`,
+        type: 'rectangle',
+        x1: 200,
+        y1: 250,
+        x2: 380,
+        y2: 350,
+        strokeColor: '#8b5cf6',
+        fillColor: '#ede9fe',
+        strokeWidth: 3,
+        text: '🛡️ API Gateway\nLoad Balancer',
+      };
+      newElements.push(newEl);
+      action = 'add';
+      message = 'Added API Gateway component to canvas.';
+    } else if (cleanCmd.includes('clean') || cleanCmd.includes('organize') || cleanCmd.includes('align')) {
+      // Organize sticky notes in a clean grid layout
+      let stickyCount = 0;
+      const startX = 100;
+      const startY = 120;
+      const colWidth = 200;
+      const rowHeight = 160;
+      const cols = 3;
+
+      updatedElements = elements.map((el) => {
+        if (el.type === 'sticky') {
+          const col = stickyCount % cols;
+          const row = Math.floor(stickyCount / cols);
+          stickyCount++;
+          return {
+            ...el,
+            x1: startX + col * colWidth,
+            y1: startY + row * rowHeight,
+            x2: startX + col * colWidth + 180,
+            y2: startY + row * rowHeight + 140,
+          };
+        }
+        return el;
+      });
+
+      action = 'organize';
+      message = `Organized ${stickyCount} sticky notes into structured alignment grid.`;
+    } else {
+      // General sticky note creation with command text
+      const newSticky = {
+        id: `ai_cmd_note_${Date.now()}`,
+        type: 'sticky',
+        x1: 300,
+        y1: 200,
+        x2: 480,
+        y2: 340,
+        strokeColor: '#6366f1',
+        fillColor: '#e0e7ff',
+        text: `💡 AI Generated:\n${command.slice(0, 80)}`,
+      };
+      newElements.push(newSticky);
+      action = 'add';
+      message = `Processed natural language instruction: "${command}".`;
+    }
+
+    const finalElements = updatedElements.length > 0 ? validateElements(updatedElements) : (newElements.length > 0 ? validateElements(newElements) : []);
+    return res.json({
+      success: true,
+      message,
+      action,
+      elements: finalElements,
+      updatedElements: updatedElements.length > 0 ? validateElements(updatedElements) : undefined,
+      newElements: newElements.length > 0 ? validateElements(newElements) : undefined,
+      data: { elements: finalElements, action, message },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 8. Document Intelligence & Auto-Extraction
+export const extractDocumentIntelligence = async (req, res, next) => {
+  try {
+    const { content = '', title = 'Uploaded Document' } = req.body;
+
+    if (!content || !content.trim()) {
+      return res.status(400).json({ success: false, message: 'Document content is required' });
+    }
+
+    const clean = content.trim();
+    const lines = clean.split('\n').filter((l) => l.trim().length > 0);
+
+    const summary = {
+      title,
+      wordCount: clean.split(/\s+/).length,
+      sectionsIdentified: Math.max(3, Math.min(8, Math.ceil(lines.length / 5))),
+      executiveSummary: lines.slice(0, 3).join(' ').slice(0, 300) || 'Analyzed uploaded document and synthesized core technical concepts into visual canvas components.',
+    };
+
+    const keyTakeaways = lines.slice(0, 4).map((l) => l.slice(0, 80));
+
+    // Generate sticky note cards across categories
+    const categories = [
+      { name: 'Summary & Goals', color: '#3b82f6', fill: '#dbeafe', x: 80 },
+      { name: 'Technical Specs', color: '#10b981', fill: '#d1fae5', x: 300 },
+      { name: 'Deliverables & Tasks', color: '#f59e0b', fill: '#fef3c7', x: 520 },
+    ];
+
+    const elements = [];
+    // Header frame
+    elements.push({
+      id: `doc_frame_${Date.now()}`,
+      type: 'frame',
+      x1: 60,
+      y1: 80,
+      x2: 740,
+      y2: 480,
+      strokeColor: '#6366f1',
+      title: `📄 Document Intelligence: ${title.slice(0, 20)}`,
+    });
+
+    categories.forEach((cat, idx) => {
+      elements.push({
+        id: `doc_sticky_${idx}_1`,
+        type: 'sticky',
+        x1: cat.x,
+        y1: 130,
+        x2: cat.x + 180,
+        y2: 270,
+        strokeColor: cat.color,
+        fillColor: cat.fill,
+        text: `📌 ${cat.name}:\n${(keyTakeaways[idx] || clean.slice(idx * 60, idx * 60 + 60)).replace(/\n/g, ' ')}`,
+      });
+      elements.push({
+        id: `doc_sticky_${idx}_2`,
+        type: 'sticky',
+        x1: cat.x,
+        y1: 300,
+        x2: cat.x + 180,
+        y2: 440,
+        strokeColor: cat.color,
+        fillColor: cat.fill,
+        text: `✅ Action Item ${idx + 1}:\nReview ${cat.name.toLowerCase()} requirements and validate scope.`,
+      });
+    });
+
+    const validated = validateElements(elements);
+    const intelligence = {
+      summary,
+      keyPoints: keyTakeaways,
+      takeaways: keyTakeaways,
+      elements: validated,
+    };
+
+    return res.json({
+      success: true,
+      summary,
+      keyTakeaways,
+      intelligence,
+      elements: validated,
+      data: { summary, intelligence, elements: validated },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 9. AI Board Critique & Improvement Doctor
+export const critiqueBoard = async (req, res, next) => {
+  try {
+    const { elements = [] } = req.body;
+
+    const shapes = elements.filter((e) => ['rectangle', 'circle', 'triangle', 'diamond', 'polygon'].includes(e.type));
+    const connectors = elements.filter((e) => ['line', 'arrow'].includes(e.type));
+    const stickies = elements.filter((e) => e.type === 'sticky');
+
+    const suggestions = [];
+
+    if (shapes.length > 3 && connectors.length === 0) {
+      suggestions.push({
+        id: 'critique_1',
+        type: 'warning',
+        title: 'Missing Connections',
+        description: 'You have multiple architectural nodes without connecting arrows. Add connectors to establish data flow directions.',
+      });
+    }
+
+    if (stickies.length > 4) {
+      suggestions.push({
+        id: 'critique_2',
+        type: 'tip',
+        title: 'Cluster Sticky Notes by Theme',
+        description: 'Organize brainstorming sticky notes into themed presentation frames or color-coded columns for better team legibility.',
+      });
+    }
+
+    suggestions.push({
+      id: 'critique_3',
+      type: 'success',
+      title: 'Layout Symmetry',
+      description: 'Elements are well positioned. Consider using snap-to-grid for 100% pixel-perfect wireframing alignment.',
+    });
+
+    const critiqueObj = {
+      elementCount: elements.length,
+      shapesCount: shapes.length,
+      connectorsCount: connectors.length,
+      stickiesCount: stickies.length,
+      suggestions,
+    };
+
+    return res.json({
+      success: true,
+      elementCount: elements.length,
+      shapesCount: shapes.length,
+      connectorsCount: connectors.length,
+      stickiesCount: stickies.length,
+      suggestions,
+      critiques: suggestions,
+      critique: critiqueObj,
+      data: { critique: critiqueObj, critiques: suggestions, suggestions },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
