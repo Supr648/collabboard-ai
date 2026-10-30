@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { User } from '../models/User.js';
 import { Workspace } from '../models/Workspace.js';
@@ -233,4 +234,123 @@ export const getMe = async (req, res) => {
       createdAt: req.user.createdAt,
     },
   });
+};
+
+// @desc    Request password reset link
+// @route   POST /api/auth/forgot-password
+// @access  Public
+export const forgotPassword = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    if (!email || !email.trim()) {
+      return res.status(400).json({ success: false, message: 'Please provide an email address' });
+    }
+
+    const emailNormalized = email.toLowerCase().trim();
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetExpires = new Date(Date.now() + 3600000); // 1 hour
+
+    if (getIsMongoConnected()) {
+      const user = await User.findOne({ email: emailNormalized });
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'No account found with this email address. Please register for a new account.',
+        });
+      }
+
+      user.resetPasswordToken = resetToken;
+      user.resetPasswordExpires = resetExpires;
+      await user.save();
+
+      return res.json({
+        success: true,
+        message: 'Password recovery link generated and dispatched to your email.',
+        resetToken,
+        resetUrl: `/reset-password/${resetToken}`,
+      });
+    } else {
+      const user = memoryStore.setResetPasswordToken(emailNormalized, resetToken, resetExpires);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'No account found with this email address. Please register for a new account.',
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: 'Password recovery link generated and dispatched to your email.',
+        resetToken,
+        resetUrl: `/reset-password/${resetToken}`,
+      });
+    }
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Reset password using valid token
+// @route   POST /api/auth/reset-password
+// @access  Public
+export const resetPassword = async (req, res, next) => {
+  try {
+    const { token } = req.body;
+    const password = req.body.password || req.body.newPassword;
+
+    if (!token) {
+      return res.status(400).json({ success: false, message: 'Reset token is required' });
+    }
+
+    if (!password || password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'New password must be at least 6 characters long',
+      });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    if (getIsMongoConnected()) {
+      const user = await User.findOne({
+        resetPasswordToken: token,
+        resetPasswordExpires: { $gt: new Date() },
+      });
+
+      if (!user) {
+        return res.status(400).json({
+          success: false,
+          message: 'Password reset token is invalid or has expired. Please request a new recovery link.',
+        });
+      }
+
+      user.password = hashedPassword;
+      user.resetPasswordToken = null;
+      user.resetPasswordExpires = null;
+      await user.save();
+
+      return res.json({
+        success: true,
+        message: 'Password reset successfully. You can now log in with your new password.',
+      });
+    } else {
+      const user = memoryStore.findUserByResetToken(token);
+      if (!user) {
+        return res.status(400).json({
+          success: false,
+          message: 'Password reset token is invalid or has expired. Please request a new recovery link.',
+        });
+      }
+
+      memoryStore.resetUserPassword(user._id, hashedPassword);
+
+      return res.json({
+        success: true,
+        message: 'Password reset successfully. You can now log in with your new password.',
+      });
+    }
+  } catch (error) {
+    next(error);
+  }
 };

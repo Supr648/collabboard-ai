@@ -44,6 +44,14 @@ const userSchema = new mongoose.Schema(
       enum: ['student', 'teacher', 'team', 'business', 'personal'],
       default: 'team',
     },
+    resetPasswordToken: {
+      type: String,
+      default: null,
+    },
+    resetPasswordExpires: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

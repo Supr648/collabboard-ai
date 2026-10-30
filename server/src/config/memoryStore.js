@@ -218,6 +218,42 @@ class MemoryStore {
     return this.users.get(id) || null;
   }
 
+  setResetPasswordToken(email, token, expires) {
+    const user = this.findUserByEmail(email);
+    if (!user) return null;
+    user.resetPasswordToken = token;
+    user.resetPasswordExpires = expires;
+    this.users.set(user._id, user);
+    this.saveToFile();
+    return user;
+  }
+
+  findUserByResetToken(token) {
+    const now = Date.now();
+    for (const user of this.users.values()) {
+      if (
+        user.resetPasswordToken === token &&
+        user.resetPasswordExpires &&
+        new Date(user.resetPasswordExpires).getTime() > now
+      ) {
+        return user;
+      }
+    }
+    return null;
+  }
+
+  resetUserPassword(userId, newHashedPassword) {
+    const user = this.users.get(userId);
+    if (!user) return null;
+    user.password = newHashedPassword;
+    user.resetPasswordToken = null;
+    user.resetPasswordExpires = null;
+    user.updatedAt = new Date().toISOString();
+    this.users.set(userId, user);
+    this.saveToFile();
+    return user;
+  }
+
   // Whiteboard operations
   createWhiteboard(boardData) {
     const id = boardData._id || 'wb_' + Math.random().toString(36).substr(2, 9);
