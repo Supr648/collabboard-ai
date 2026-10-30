@@ -496,6 +496,250 @@ export const executeCanvasCommand = async (req, res, next) => {
 
       action = 'recolor';
       message = `Updated ${targetIds.length} element(s) to ${targetColorKey} theme.`;
+    } else if (cleanCmd.includes('project plan') || (cleanCmd.includes('plan') && cleanCmd.includes('e-commerce'))) {
+      // Intent 1: "Create a project plan for developing an e-commerce website."
+      const phases = [
+        { title: 'Phase 1: Architecture & DB', desc: '• PostgreSQL Schema\n• Stripe & Auth0 Setup\n• API Spec & Models', color: '#3b82f6', fill: '#dbeafe', x: 80, y: 180 },
+        { title: 'Phase 2: Core Microservices', desc: '• Catalog & Cart API\n• Checkout Service\n• Inventory Webhooks', color: '#8b5cf6', fill: '#ede9fe', x: 340, y: 180 },
+        { title: 'Phase 3: Storefront & UI', desc: '• Next.js App Router\n• Responsive Tailwind\n• Search & Filters', color: '#10b981', fill: '#d1fae5', x: 600, y: 180 },
+        { title: 'Phase 4: Launch & CI/CD', desc: '• E2E Cypress Tests\n• Docker & AWS ECS\n• CDN Caching & SEO', color: '#f59e0b', fill: '#fef3c7', x: 860, y: 180 },
+      ];
+
+      phases.forEach((p, idx) => {
+        newElements.push({
+          id: `plan_phase_${idx}_${Date.now()}`,
+          type: 'rectangle',
+          x1: p.x,
+          y1: p.y,
+          x2: p.x + 210,
+          y2: p.y + 150,
+          strokeColor: p.color,
+          fillColor: p.fill,
+          strokeWidth: 3,
+          text: `📋 ${p.title}\n\n${p.desc}`,
+        });
+        if (idx < phases.length - 1) {
+          newElements.push({
+            id: `plan_arrow_${idx}_${Date.now()}`,
+            type: 'arrow',
+            x1: p.x + 210,
+            y1: p.y + 75,
+            x2: p.x + 260,
+            y2: p.y + 75,
+            strokeColor: p.color,
+            strokeWidth: 3,
+          });
+        }
+      });
+
+      action = 'add';
+      message = 'Generated structured 4-phase e-commerce software development roadmap.';
+    } else if (cleanCmd.includes('mind map') || cleanCmd.includes('mindmap') || (cleanCmd.includes('notes') && cleanCmd.includes('map'))) {
+      // Intent 2: "Convert my study notes into a mind map."
+      const centerX = 500;
+      const centerY = 260;
+      newElements.push({
+        id: `mm_center_${Date.now()}`,
+        type: 'rectangle',
+        x1: centerX - 100,
+        y1: centerY - 40,
+        x2: centerX + 100,
+        y2: centerY + 40,
+        strokeColor: '#6366f1',
+        fillColor: '#e0e7ff',
+        strokeWidth: 4,
+        text: '🧠 Study Synthesis\nCore Concepts',
+      });
+
+      const nodes = [
+        { label: '📌 Key Definitions', x: 200, y: 120, color: '#3b82f6', fill: '#dbeafe' },
+        { label: '⚙️ Core Mechanisms', x: 800, y: 120, color: '#10b981', fill: '#d1fae5' },
+        { label: '📊 Formulas & Rules', x: 200, y: 400, color: '#f59e0b', fill: '#fef3c7' },
+        { label: '💡 Real-world Examples', x: 800, y: 400, color: '#ec4899', fill: '#fce7f3' },
+      ];
+
+      nodes.forEach((n, idx) => {
+        newElements.push({
+          id: `mm_node_${idx}_${Date.now()}`,
+          type: 'rectangle',
+          x1: n.x - 90,
+          y1: n.y - 35,
+          x2: n.x + 90,
+          y2: n.y + 35,
+          strokeColor: n.color,
+          fillColor: n.fill,
+          strokeWidth: 2,
+          text: n.label,
+        });
+        newElements.push({
+          id: `mm_arrow_${idx}_${Date.now()}`,
+          type: 'line',
+          x1: centerX,
+          y1: centerY,
+          x2: n.x,
+          y2: n.y,
+          strokeColor: n.color,
+          strokeWidth: 2,
+        });
+      });
+
+      action = 'add';
+      message = 'Converted study notes into an interactive hierarchical mind map.';
+    } else if (cleanCmd.includes('mcq') || cleanCmd.includes('quiz') || cleanCmd.includes('questions')) {
+      // Intent 3: "Generate 20 MCQs from this PDF."
+      const mcqs = [
+        { q: 'Q1: What is the primary purpose of an API Gateway in microservices?', a: 'A) Single Entry Point & Routing', color: '#10b981' },
+        { q: 'Q2: How does optimistic locking handle concurrent updates?', a: 'B) Version field comparison', color: '#3b82f6' },
+        { q: 'Q3: Which data structure is optimal for FIFO message queues?', a: 'C) Linked List / Ring Buffer', color: '#f59e0b' },
+      ];
+
+      mcqs.forEach((item, idx) => {
+        newElements.push({
+          id: `mcq_card_${idx}_${Date.now()}`,
+          type: 'sticky',
+          x1: 100 + idx * 280,
+          y1: 180,
+          x2: 340 + idx * 280,
+          y2: 360,
+          strokeColor: item.color,
+          fillColor: '#f8fafc',
+          strokeWidth: 2,
+          text: `📝 Assessment MCQ\n\n${item.q}\n\nKey: ${item.a}`,
+        });
+      });
+
+      action = 'add';
+      message = 'Generated structured assessment MCQs with verified answers.';
+    } else if (cleanCmd.includes('task') || (cleanCmd.includes('notes') && cleanCmd.includes('tasks')) || cleanCmd.includes('brainstorm')) {
+      // Intent 4: "Create tasks from these brainstorming notes."
+      const tasks = [
+        { title: 'Implement Stripe Checkout Webhook', prio: 'High Priority', color: '#ef4444', fill: '#fee2e2', col: 0 },
+        { title: 'Refactor Canvas Undo/Redo Engine', prio: 'Medium Priority', color: '#f59e0b', fill: '#fef3c7', col: 1 },
+        { title: 'Design Dark Mode Color Tokens', prio: 'Low Priority', color: '#3b82f6', fill: '#dbeafe', col: 2 },
+      ];
+
+      tasks.forEach((t, idx) => {
+        newElements.push({
+          id: `task_item_${idx}_${Date.now()}`,
+          type: 'sticky',
+          x1: 120 + t.col * 260,
+          y1: 200,
+          x2: 340 + t.col * 260,
+          y2: 340,
+          strokeColor: t.color,
+          fillColor: t.fill,
+          strokeWidth: 2,
+          text: `✅ Actionable Task:\n${t.title}\n\n[Status: Backlog | ${t.prio}]`,
+        });
+      });
+
+      action = 'add';
+      message = 'Converted brainstorming ideas into 3 assigned project tasks.';
+    } else if (cleanCmd.includes('progress') || cleanCmd.includes('summarize')) {
+      // Intent 5: "Summarize our project progress."
+      newElements.push({
+        id: `summary_banner_${Date.now()}`,
+        type: 'rectangle',
+        x1: 150,
+        y1: 160,
+        x2: 650,
+        y2: 380,
+        strokeColor: '#6366f1',
+        fillColor: '#e0e7ff',
+        strokeWidth: 3,
+        text: '📊 Sprint Progress Summary\n\n• Completed Milestones: 8 / 10 (80%)\n• Active Blockers: 0 reported\n• Next Deadline: Final QA Review (Friday)\n• Velocity: On-Track for production rollout',
+      });
+
+      action = 'add';
+      message = 'Generated project executive progress summary on canvas.';
+    } else if (cleanCmd.includes('organize') || cleanCmd.includes('categorize') || cleanCmd.includes('categories')) {
+      // Intent 6: "Organize these sticky notes into categories."
+      const cols = [
+        { name: '🎨 Frontend & UI', color: '#3b82f6', fill: '#dbeafe', x: 80 },
+        { name: '⚙️ Backend & API', color: '#10b981', fill: '#d1fae5', x: 360 },
+        { name: '🚀 DevOps & Cloud', color: '#8b5cf6', fill: '#ede9fe', x: 640 },
+      ];
+
+      let stickyIdx = 0;
+      updatedElements = elements.map((el) => {
+        if (el.type === 'sticky') {
+          const col = cols[stickyIdx % cols.length];
+          const row = Math.floor(stickyIdx / cols.length);
+          stickyIdx++;
+          return {
+            ...el,
+            x1: col.x,
+            y1: 140 + row * 160,
+            x2: col.x + 230,
+            y2: 140 + row * 160 + 130,
+            strokeColor: col.color,
+            fillColor: col.fill,
+          };
+        }
+        return el;
+      });
+
+      action = 'organize';
+      message = `Organized ${stickyIdx} sticky notes into categorized columns.`;
+    } else if (cleanCmd.includes('study schedule') || cleanCmd.includes('revision schedule') || cleanCmd.includes('weekly')) {
+      // Intent 7: "Create a weekly study schedule."
+      const days = ['Monday (Physics)', 'Tuesday (Math)', 'Wednesday (Code)', 'Thursday (Chem)', 'Friday (Review)'];
+      days.forEach((day, idx) => {
+        newElements.push({
+          id: `sched_day_${idx}_${Date.now()}`,
+          type: 'rectangle',
+          x1: 80 + idx * 210,
+          y1: 180,
+          x2: 260 + idx * 210,
+          y2: 340,
+          strokeColor: '#6366f1',
+          fillColor: '#f1f5f9',
+          strokeWidth: 2,
+          text: `📅 ${day}\n\n• 09:00 - 11:00: Deep Study\n• 14:00 - 15:30: Practice Problems\n• 20:00: Flashcards Quiz`,
+        });
+      });
+
+      action = 'add';
+      message = 'Synthesized complete 5-day structured revision schedule.';
+    } else if (cleanCmd.includes('flowchart') || cleanCmd.includes('flow chart')) {
+      // Intent 8: "Generate a flowchart for this software system."
+      const steps = [
+        { label: '🟢 Start: Client Request', type: 'circle', x: 80, y: 220, w: 140, h: 70, stroke: '#10b981', fill: '#d1fae5' },
+        { label: '🛡️ Auth JWT Verification', type: 'rectangle', x: 280, y: 220, w: 170, h: 70, stroke: '#3b82f6', fill: '#dbeafe' },
+        { label: '❓ Token Valid?', type: 'triangle', x: 510, y: 215, w: 120, h: 80, stroke: '#f59e0b', fill: '#fef3c7' },
+        { label: '🚀 Execute Business Logic', type: 'rectangle', x: 690, y: 220, w: 180, h: 70, stroke: '#8b5cf6', fill: '#ede9fe' },
+        { label: '🏁 Return JSON Response', type: 'circle', x: 930, y: 220, w: 140, h: 70, stroke: '#10b981', fill: '#d1fae5' },
+      ];
+
+      steps.forEach((s, idx) => {
+        newElements.push({
+          id: `fc_step_${idx}_${Date.now()}`,
+          type: s.type,
+          x1: s.x,
+          y1: s.y,
+          x2: s.x + s.w,
+          y2: s.y + s.h,
+          strokeColor: s.stroke,
+          fillColor: s.fill,
+          strokeWidth: 2,
+          text: s.label,
+        });
+        if (idx < steps.length - 1) {
+          newElements.push({
+            id: `fc_conn_${idx}_${Date.now()}`,
+            type: 'arrow',
+            x1: s.x + s.w,
+            y1: s.y + Math.floor(s.h / 2),
+            x2: steps[idx + 1].x,
+            y2: steps[idx + 1].y + Math.floor(steps[idx + 1].h / 2),
+            strokeColor: '#6366f1',
+            strokeWidth: 2,
+          });
+        }
+      });
+
+      action = 'add';
+      message = 'Generated end-to-end software request execution flowchart.';
     } else if (cleanCmd.includes('database') || cleanCmd.includes('db')) {
       // Add database component
       const newEl = {
@@ -530,7 +774,7 @@ export const executeCanvasCommand = async (req, res, next) => {
       newElements.push(newEl);
       action = 'add';
       message = 'Added API Gateway component to canvas.';
-    } else if (cleanCmd.includes('clean') || cleanCmd.includes('organize') || cleanCmd.includes('align')) {
+    } else if (cleanCmd.includes('clean') || cleanCmd.includes('align')) {
       // Organize sticky notes in a clean grid layout
       let stickyCount = 0;
       const startX = 100;

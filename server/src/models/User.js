@@ -39,6 +39,11 @@ const userSchema = new mongoose.Schema(
         return colors[Math.floor(Math.random() * colors.length)];
       },
     },
+    primaryWorkspaceType: {
+      type: String,
+      enum: ['student', 'teacher', 'team', 'business', 'personal'],
+      default: 'team',
+    },
   },
   {
     timestamps: true,

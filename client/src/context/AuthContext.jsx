@@ -40,8 +40,8 @@ export const AuthProvider = ({ children }) => {
     return data;
   };
 
-  const register = async (name, email, password) => {
-    const data = await registerUser({ name, email, password });
+  const register = async (name, email, password, primaryWorkspaceType = 'team') => {
+    const data = await registerUser({ name, email, password, primaryWorkspaceType });
     if (data.success && data.token) {
       localStorage.setItem('token', data.token);
       setToken(data.token);

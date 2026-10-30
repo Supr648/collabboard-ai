@@ -2,6 +2,7 @@ import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { WorkspaceProvider } from './context/WorkspaceContext';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import LoadingScreen from './components/common/LoadingScreen';
 
@@ -17,7 +18,8 @@ function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <BrowserRouter>
+        <WorkspaceProvider>
+          <BrowserRouter>
           <Suspense fallback={<LoadingScreen />}>
             <Routes>
               {/* Public Landing & Marketing */}
@@ -45,6 +47,7 @@ function App() {
             </Routes>
           </Suspense>
         </BrowserRouter>
+        </WorkspaceProvider>
       </AuthProvider>
     </ThemeProvider>
   );

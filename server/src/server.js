@@ -9,6 +9,13 @@ import authRoutes from './routes/authRoutes.js';
 import whiteboardRoutes from './routes/whiteboardRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
 import taskRoutes from './routes/taskRoutes.js';
+import workspaceRoutes from './routes/workspaceRoutes.js';
+import studentRoutes from './routes/studentRoutes.js';
+import projectRoutes from './routes/projectRoutes.js';
+import teacherRoutes from './routes/teacherRoutes.js';
+import personalRoutes from './routes/personalRoutes.js';
+import templateRoutes from './routes/templateRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
 import { setupSocketHandlers } from './sockets/socketHandler.js';
 import { notFound, errorHandler } from './middleware/errorHandler.js';
 
@@ -152,6 +159,13 @@ app.use('/api/whiteboards', whiteboardRoutes);
 app.use('/api/whiteboard', whiteboardRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/tasks', taskRoutes);
+app.use('/api/workspaces', workspaceRoutes);
+app.use('/api/student', studentRoutes);
+app.use('/api/projects', projectRoutes);
+app.use('/api/teacher', teacherRoutes);
+app.use('/api/personal', personalRoutes);
+app.use('/api/templates', templateRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Error Handling Middlewares
 app.use(notFound);

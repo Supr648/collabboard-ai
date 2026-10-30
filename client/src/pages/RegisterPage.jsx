@@ -9,6 +9,7 @@ const RegisterPage = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [primaryWorkspaceType, setPrimaryWorkspaceType] = useState('student');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -27,7 +28,7 @@ const RegisterPage = () => {
     setLoading(true);
 
     try {
-      await register(name, email, password);
+      await register(name, email, password, primaryWorkspaceType);
       navigate('/dashboard');
     } catch (err) {
       setError(
@@ -116,12 +117,48 @@ const RegisterPage = () => {
               </div>
             </div>
 
+            {/* Workspace Purpose Selection */}
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
+                Primary Workspace Purpose
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { id: 'student', label: 'Student', desc: 'Study notes & AI quizzes', icon: '🎓' },
+                  { id: 'teacher', label: 'Teacher', desc: 'Classrooms & assignments', icon: '👨‍🏫' },
+                  { id: 'team', label: 'Team', desc: 'Projects & Kanban sprints', icon: '💼' },
+                  { id: 'personal', label: 'Personal', desc: 'Daily planner & habits', icon: '🎯' },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setPrimaryWorkspaceType(item.id)}
+                    className={`p-2.5 rounded-2xl border text-left transition-all flex flex-col justify-between ${
+                      primaryWorkspaceType === item.id
+                        ? 'border-indigo-600 bg-indigo-50/70 dark:bg-indigo-950/60 ring-2 ring-indigo-500/30'
+                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white/40 dark:bg-slate-900/40'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className="text-base">{item.icon}</span>
+                      <span className="text-xs font-bold text-slate-900 dark:text-white">
+                        {item.label}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
+                      {item.desc}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <button
               type="submit"
               disabled={loading}
-              className="w-full mt-2 py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold text-sm shadow-lg shadow-indigo-500/25 transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full mt-3 py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold text-sm shadow-lg shadow-indigo-500/25 transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              <span>{loading ? 'Creating account...' : 'Create Free Account'}</span>
+              <span>{loading ? 'Creating workspace...' : 'Launch CollabBoard Workspace'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>

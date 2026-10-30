@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { User } from '../models/User.js';
+import { Workspace } from '../models/Workspace.js';
 import { memoryStore } from '../config/memoryStore.js';
 import { getIsMongoConnected } from '../config/db.js';
 import { generateToken } from '../middleware/auth.js';
@@ -17,7 +18,7 @@ const getRandomColor = () => AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COL
 // @access  Public
 export const register = async (req, res, next) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, primaryWorkspaceType, workspaceType } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({
@@ -34,6 +35,9 @@ export const register = async (req, res, next) => {
     }
 
     const emailNormalized = email.toLowerCase().trim();
+    const chosenType = primaryWorkspaceType || workspaceType || 'team';
+    const validTypes = ['student', 'teacher', 'team', 'business', 'personal'];
+    const resolvedType = validTypes.includes(chosenType) ? chosenType : 'team';
 
     if (getIsMongoConnected()) {
       const existingUser = await User.findOne({ email: emailNormalized });
@@ -52,6 +56,23 @@ export const register = async (req, res, next) => {
         email: emailNormalized,
         password: hashedPassword,
         avatarColor: getRandomColor(),
+        primaryWorkspaceType: resolvedType,
+      });
+
+      // Auto-create initial primary workspace
+      const typeTitles = {
+        student: 'Student Learning Workspace',
+        teacher: 'Classroom & Curriculum Workspace',
+        team: 'Team Collaborative Workspace',
+        business: 'Enterprise Business Workspace',
+        personal: 'Personal Productivity Workspace',
+      };
+      await Workspace.create({
+        name: `${name.trim()}'s ${typeTitles[resolvedType] || 'Workspace'}`,
+        type: resolvedType,
+        owner: user._id,
+        members: [{ user: user._id, role: 'owner' }],
+        description: `Primary ${resolvedType} workspace environment.`,
       });
 
       const token = generateToken(user._id);
@@ -65,6 +86,7 @@ export const register = async (req, res, next) => {
           name: user.name,
           email: user.email,
           avatarColor: user.avatarColor,
+          primaryWorkspaceType: user.primaryWorkspaceType,
         },
       });
     } else {
@@ -85,7 +107,11 @@ export const register = async (req, res, next) => {
         email: emailNormalized,
         password: hashedPassword,
         avatarColor: getRandomColor(),
+        primaryWorkspaceType: resolvedType,
       });
+
+      // Auto-create initial primary workspace in memory store
+      memoryStore.ensureDefaultWorkspace(user._id, resolvedType, name.trim());
 
       const token = generateToken(user._id);
 
@@ -98,6 +124,7 @@ export const register = async (req, res, next) => {
           name: user.name,
           email: user.email,
           avatarColor: user.avatarColor,
+          primaryWorkspaceType: user.primaryWorkspaceType,
         },
       });
     }
@@ -150,6 +177,7 @@ export const login = async (req, res, next) => {
           name: user.name,
           email: user.email,
           avatarColor: user.avatarColor,
+          primaryWorkspaceType: user.primaryWorkspaceType || 'team',
         },
       });
     } else {
@@ -181,6 +209,7 @@ export const login = async (req, res, next) => {
           name: user.name,
           email: user.email,
           avatarColor: user.avatarColor,
+          primaryWorkspaceType: user.primaryWorkspaceType || 'team',
         },
       });
     }
@@ -200,6 +229,7 @@ export const getMe = async (req, res) => {
       name: req.user.name,
       email: req.user.email,
       avatarColor: req.user.avatarColor,
+      primaryWorkspaceType: req.user.primaryWorkspaceType || 'team',
       createdAt: req.user.createdAt,
     },
   });

@@ -1,5 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { useWorkspace } from '../../context/WorkspaceContext';
+import WorkspaceSwitcher from './WorkspaceSwitcher';
 import {
   LayoutDashboard,
   Clock,
@@ -15,6 +17,15 @@ import {
   ChevronLeft,
   ChevronRight,
   HelpCircle,
+  GraduationCap,
+  BookOpen,
+  CheckSquare,
+  Compass,
+  Calendar,
+  Vote,
+  Kanban,
+  Target,
+  Zap,
 } from 'lucide-react';
 
 const Sidebar = ({
@@ -27,17 +38,56 @@ const Sidebar = ({
   onOpenCommandPalette,
   onOpenShortcuts,
   onOpenOnboarding,
+  onOpenCreateWorkspace,
   isCollapsed = false,
   onToggleCollapse,
 }) => {
-  const navItems = [
-    { id: 'all', label: 'All Whiteboards', icon: LayoutDashboard },
-    { id: 'favorites', label: 'Favorites', icon: Star, badge: favoritesCount },
-    { id: 'recent', label: 'Recent Activity', icon: Clock },
-    { id: 'my', label: 'My Whiteboards', icon: FolderLock },
-    { id: 'shared', label: 'Shared with Me', icon: Share2 },
-    { id: 'templates', label: 'Templates Gallery', icon: Bookmark },
-  ];
+  const { currentWorkspace } = useWorkspace();
+  const wsType = currentWorkspace?.type || 'team';
+
+  // Purpose-tailored navigation items
+  const getNavItems = () => {
+    switch (wsType) {
+      case 'student':
+        return [
+          { id: 'all', label: 'Study Boards', icon: BookOpen, badge: totalBoards },
+          { id: 'subjects', label: 'Subjects & Notes', icon: GraduationCap },
+          { id: 'flashcards', label: 'Flashcards Decks', icon: Layers },
+          { id: 'quizzes', label: 'AI Quizzes & Tests', icon: Sparkles },
+          { id: 'revision', label: 'Revision Schedule', icon: Calendar },
+          { id: 'favorites', label: 'Starred Materials', icon: Star, badge: favoritesCount },
+        ];
+      case 'teacher':
+        return [
+          { id: 'all', label: 'Lesson Boards', icon: BookOpen, badge: totalBoards },
+          { id: 'classrooms', label: 'Classrooms & Students', icon: Compass },
+          { id: 'assignments', label: 'Assignments & Deadlines', icon: CheckSquare },
+          { id: 'templates', label: 'Teaching Templates', icon: Bookmark },
+          { id: 'favorites', label: 'Favorite Lessons', icon: Star, badge: favoritesCount },
+        ];
+      case 'personal':
+        return [
+          { id: 'all', label: 'My Notes & Boards', icon: LayoutDashboard, badge: totalBoards },
+          { id: 'planner', label: 'Daily & Weekly Plan', icon: Calendar },
+          { id: 'goals', label: 'Goal Milestones', icon: Target },
+          { id: 'habits', label: 'Habit Streaks', icon: Zap },
+          { id: 'favorites', label: 'Starred Boards', icon: Star, badge: favoritesCount },
+        ];
+      case 'business':
+      case 'team':
+      default:
+        return [
+          { id: 'all', label: 'All Whiteboards', icon: LayoutDashboard, badge: totalBoards },
+          { id: 'projects', label: 'Active Projects', icon: Kanban },
+          { id: 'voting', label: 'Live Voting & Polls', icon: Vote },
+          { id: 'favorites', label: 'Favorites', icon: Star, badge: favoritesCount },
+          { id: 'recent', label: 'Recent Activity', icon: Clock },
+          { id: 'templates', label: 'Templates Gallery', icon: Bookmark },
+        ];
+    }
+  };
+
+  const navItems = getNavItems();
 
   const onlineTeam = [
     { name: 'Alex M.', role: 'Architect', color: '#6366f1', status: 'online' },
@@ -51,12 +101,18 @@ const Sidebar = ({
       transition={{ type: 'spring', damping: 25, stiffness: 300 }}
       className="border-r border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/50 backdrop-blur-xl p-3.5 flex flex-col justify-between hidden md:flex min-h-[calc(100vh-4rem)] transition-colors select-none"
     >
-      <div className="space-y-5">
+      <div className="space-y-4">
+        {/* Workspace Switcher */}
+        <WorkspaceSwitcher
+          isCollapsed={isCollapsed}
+          onOpenCreateModal={onOpenCreateWorkspace}
+        />
+
         {/* Create Board CTA */}
         <button
           onClick={onNewBoard}
           title="Create New Whiteboard"
-          className="w-full flex items-center justify-center gap-2 px-3 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:to-pink-700 text-white font-bold text-xs shadow-lg shadow-indigo-500/25 transition-all hover:scale-[1.02] active:scale-[0.98]"
+          className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:to-pink-700 text-white font-bold text-xs shadow-lg shadow-indigo-500/25 transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
           <Plus className="w-4 h-4 shrink-0" />
           {!isCollapsed && <span>New Whiteboard</span>}
@@ -83,7 +139,7 @@ const Sidebar = ({
         <div className="space-y-1">
           {!isCollapsed && (
             <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-              Workspaces
+              Navigation
             </p>
           )}
           {navItems.map((item) => {
@@ -110,19 +166,10 @@ const Sidebar = ({
                   <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-indigo-600 dark:text-indigo-400' : ''}`} />
                   {!isCollapsed && <span className="truncate">{item.label}</span>}
                 </div>
-                {!isCollapsed && (
-                  <>
-                    {item.id === 'all' && (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-mono">
-                        {totalBoards}
-                      </span>
-                    )}
-                    {item.id === 'favorites' && favoritesCount > 0 && (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 font-bold font-mono">
-                        {favoritesCount}
-                      </span>
-                    )}
-                  </>
+                {!isCollapsed && item.badge !== undefined && item.badge > 0 && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-mono">
+                    {item.badge}
+                  </span>
                 )}
               </button>
             );
@@ -130,7 +177,7 @@ const Sidebar = ({
         </div>
 
         {/* Recently Active Team Members */}
-        {!isCollapsed && (
+        {!isCollapsed && wsType !== 'personal' && (
           <div>
             <div className="px-3 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">
               <span>Online Collaborators</span>

@@ -23,29 +23,11 @@ import {
   Radio,
 } from 'lucide-react';
 
-const MOCK_NOTIFICATIONS = [
-  {
-    id: 'notif_1',
-    title: 'Cloud Architecture synced',
-    desc: 'Auto-saved 14 visual elements to cloud',
-    time: '2m ago',
-    type: 'success',
-  },
-  {
-    id: 'notif_2',
-    title: 'Collaborator active',
-    desc: 'Alex M. connected to live room',
-    time: '12m ago',
-    type: 'info',
-  },
-  {
-    id: 'notif_3',
-    title: 'Task Assigned',
-    desc: 'CRDT conflict vector task moved to In Progress',
-    time: '1h ago',
-    type: 'task',
-  },
-];
+import {
+  getNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+} from '../../api/notifications';
 
 const Navbar = ({ onNewBoard, onOpenTemplates, onOpenCommandPalette }) => {
   const { user, isAuthenticated, logout } = useAuth();
@@ -54,12 +36,55 @@ const Navbar = ({ onNewBoard, onOpenTemplates, onOpenCommandPalette }) => {
   const [notifsOpen, setNotifsOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [activityModalOpen, setActivityModalOpen] = useState(false);
-  const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS);
-  const [hasUnread, setHasUnread] = useState(true);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const profileRef = useRef(null);
   const notifRef = useRef(null);
   const navigate = useNavigate();
+
+  const loadNotifications = async () => {
+    if (!isAuthenticated) return;
+    try {
+      const res = await getNotifications();
+      if (res.success) {
+        setNotifications(res.notifications || []);
+        setUnreadCount(res.unreadCount || 0);
+      }
+    } catch (e) {
+      // Non-blocking
+    }
+  };
+
+  useEffect(() => {
+    loadNotifications();
+    const interval = setInterval(loadNotifications, 30000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated]);
+
+  const handleMarkAllRead = async () => {
+    try {
+      await markAllNotificationsRead();
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      setUnreadCount(0);
+    } catch (e) {}
+  };
+
+  const handleItemClick = async (notif) => {
+    if (!notif.read) {
+      try {
+        await markNotificationRead(notif._id || notif.id);
+        setNotifications((prev) =>
+          prev.map((n) => (n._id === notif._id || n.id === notif.id ? { ...n, read: true } : n))
+        );
+        setUnreadCount((prev) => Math.max(0, prev - 1));
+      } catch (e) {}
+    }
+    if (notif.link) {
+      navigate(notif.link);
+      setNotifsOpen(false);
+    }
+  };
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -145,8 +170,10 @@ const Navbar = ({ onNewBoard, onOpenTemplates, onOpenCommandPalette }) => {
                   className="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors relative"
                 >
                   <Bell className="w-4 h-4" />
-                  {hasUnread && (
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-slate-900 animate-pulse" />
+                  {unreadCount > 0 && (
+                    <span className="absolute top-1 right-1 px-1 min-w-4 h-4 rounded-full bg-rose-500 text-[9px] font-black text-white flex items-center justify-center ring-2 ring-white dark:ring-slate-900 animate-pulse">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
                   )}
                 </button>
 
@@ -161,32 +188,47 @@ const Navbar = ({ onNewBoard, onOpenTemplates, onOpenCommandPalette }) => {
                     >
                       <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 dark:border-slate-800 px-1">
                         <span className="text-xs font-bold text-slate-900 dark:text-white">
-                          Activity & Notifications
+                          Activity & Notifications {unreadCount > 0 && `(${unreadCount})`}
                         </span>
-                        <span className="text-[10px] text-indigo-500 font-semibold cursor-pointer" onClick={() => setNotifications([])}>
-                          Clear all
-                        </span>
+                        {notifications.length > 0 && (
+                          <span
+                            className="text-[10px] text-indigo-500 font-semibold cursor-pointer hover:underline"
+                            onClick={handleMarkAllRead}
+                          >
+                            Mark all read
+                          </span>
+                        )}
                       </div>
 
                       <div className="space-y-1.5 max-h-64 overflow-y-auto">
                         {notifications.length === 0 ? (
                           <div className="py-6 text-center text-xs text-slate-400">
-                            No unread notifications.
+                            No notifications yet. You're all caught up!
                           </div>
                         ) : (
                           notifications.map((n) => (
                             <div
-                              key={n.id}
-                              className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors text-left"
+                              key={n._id || n.id}
+                              onClick={() => handleItemClick(n)}
+                              className={`p-2.5 rounded-xl cursor-pointer transition-colors text-left ${
+                                !n.read
+                                  ? 'bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/40'
+                                  : 'hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                              }`}
                             >
-                              <div className="flex items-center justify-between">
-                                <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                                  {n.title}
-                                </p>
-                                <span className="text-[10px] text-slate-400">{n.time}</span>
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 shrink-0" />}
+                                  <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
+                                    {n.title}
+                                  </p>
+                                </div>
+                                <span className="text-[10px] text-slate-400 shrink-0">
+                                  {n.createdAt ? new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Now'}
+                                </span>
                               </div>
-                              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                                {n.desc}
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
+                                {n.message || n.desc}
                               </p>
                             </div>
                           ))

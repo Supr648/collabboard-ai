@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Modal from '../common/Modal';
 import {
   Sparkles,
@@ -8,13 +8,27 @@ import {
   BrainCircuit,
   MessageSquare,
   ArrowRight,
+  Search,
+  BookOpen,
+  Briefcase,
+  Share2,
+  Heart,
+  Flag,
+  Check,
+  Plus,
 } from 'lucide-react';
+import {
+  getCommunityTemplates,
+  publishCommunityTemplate,
+  cloneCommunityTemplate,
+  reportCommunityTemplate,
+} from '../../api/community';
 
 export const TEMPLATES = [
   {
     id: 'system_architecture',
     title: 'Cloud System Architecture',
-    category: 'Engineering',
+    category: 'project',
     icon: Server,
     color: '#6366f1',
     description: 'High-availability microservices diagram with API Gateway, Auth, Postgres, and Redis.',
@@ -42,12 +56,11 @@ export const TEMPLATES = [
   {
     id: 'kanban_board',
     title: 'Agile Kanban Sprint Board',
-    category: 'Productivity',
+    category: 'project',
     icon: Kanban,
     color: '#10b981',
     description: '4-column agile task board with To-Do, In Progress, Review, and Done sticky notes.',
     generateElements: () => [
-      // 4 Column Bounding Boxes
       { id: 'k_col_1', type: 'rectangle', x1: 60, y1: 100, x2: 320, y2: 560, strokeColor: '#94a3b8', strokeWidth: 2, fillColor: '#f1f5f988' },
       { id: 'k_txt_1', type: 'text', x: 120, y: 120, text: '📋 TO DO (3)', strokeColor: '#334155', fontSize: 18 },
       { id: 'k_sn_1', type: 'sticky', x1: 85, y1: 170, x2: 295, y2: 270, strokeColor: '#f59e0b', fillColor: '#fef3c7', text: 'Refactor Canvas Render Loop\nOptimized for 60 FPS' },
@@ -69,7 +82,7 @@ export const TEMPLATES = [
   {
     id: 'decision_flowchart',
     title: 'Decision Flowchart & Workflow',
-    category: 'Engineering',
+    category: 'flowchart',
     icon: GitFork,
     color: '#8b5cf6',
     description: 'Standard flowchart with start/stop pills, decision diamonds, and branch connectors.',
@@ -97,7 +110,7 @@ export const TEMPLATES = [
   {
     id: 'ai_brainstorming',
     title: 'Brainstorming & Mind Map',
-    category: 'Design & Strategy',
+    category: 'mindmap',
     icon: BrainCircuit,
     color: '#ec4899',
     description: 'Central concept hub with branching idea nodes and opportunity clusters.',
@@ -120,53 +133,299 @@ export const TEMPLATES = [
   },
 ];
 
-const TemplatesModal = ({ isOpen, onClose, onSelectTemplate }) => {
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Choose a Workspace Template" maxWidth="max-w-3xl">
-      <div className="space-y-4">
-        <p className="text-xs text-slate-500 dark:text-slate-400">
-          Jumpstart your team's workflow with professionally pre-structured canvas blueprints.
-        </p>
+const CATEGORIES = [
+  { id: 'all', label: 'All Templates' },
+  { id: 'study', label: 'Study & Notes' },
+  { id: 'project', label: 'Project Management' },
+  { id: 'business', label: 'Business Planning' },
+  { id: 'flowchart', label: 'Flowcharts' },
+  { id: 'mindmap', label: 'Mind Maps' },
+];
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-          {TEMPLATES.map((tpl) => {
+const TemplatesModal = ({ isOpen, onClose, onSelectTemplate }) => {
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [search, setSearch] = useState('');
+  const [communityTemplates, setCommunityTemplates] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [publishModalOpen, setPublishModalOpen] = useState(false);
+  const [publishForm, setPublishForm] = useState({ title: '', description: '', category: 'project' });
+  const [reportSuccessId, setReportSuccessId] = useState(null);
+
+  const loadCommunityTemplates = async () => {
+    try {
+      setLoading(true);
+      const res = await getCommunityTemplates({ category: selectedCategory, search });
+      if (res.success) {
+        setCommunityTemplates(res.templates || []);
+      }
+    } catch (e) {
+      // Fallback cleanly
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      loadCommunityTemplates();
+    }
+  }, [isOpen, selectedCategory, search]);
+
+  // Merge built-in blueprints and community templates
+  const filteredBlueprints = TEMPLATES.filter((tpl) => {
+    const matchesCat = selectedCategory === 'all' || tpl.category === selectedCategory;
+    const matchesSearch =
+      !search.trim() ||
+      tpl.title.toLowerCase().includes(search.toLowerCase()) ||
+      tpl.description.toLowerCase().includes(search.toLowerCase());
+    return matchesCat && matchesSearch;
+  });
+
+  const handleUseTemplate = async (template) => {
+    if (template._id) {
+      // Community template
+      try {
+        await cloneCommunityTemplate(template._id);
+      } catch (e) {}
+      onSelectTemplate({
+        title: template.title,
+        generateElements: () => template.elements || [],
+      });
+    } else {
+      // Built-in blueprint
+      onSelectTemplate(template);
+    }
+    onClose();
+  };
+
+  const handleReport = async (e, tplId) => {
+    e.stopPropagation();
+    try {
+      await reportCommunityTemplate(tplId, 'User reported inappropriate content');
+      setReportSuccessId(tplId);
+      setTimeout(() => {
+        setCommunityTemplates((prev) => prev.filter((t) => t._id !== tplId));
+        setReportSuccessId(null);
+      }, 1500);
+    } catch (err) {}
+  };
+
+  const handlePublishSubmit = async (e) => {
+    e.preventDefault();
+    if (!publishForm.title.trim()) return;
+
+    try {
+      const res = await publishCommunityTemplate({
+        title: publishForm.title.trim(),
+        description: publishForm.description.trim(),
+        category: publishForm.category,
+        elements: [
+          { id: 'el_init_1', type: 'rectangle', x1: 100, y1: 100, x2: 300, y2: 240, strokeColor: '#6366f1', fillColor: '#e0e7ff', text: publishForm.title },
+        ],
+      });
+      if (res.success && res.template) {
+        setCommunityTemplates((prev) => [res.template, ...prev]);
+        setPublishModalOpen(false);
+        setPublishForm({ title: '', description: '', category: 'project' });
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Public Template & Community Library" maxWidth="max-w-4xl">
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Explore community architectures, study outlines, and business frameworks, or publish your own.
+          </p>
+          <button
+            onClick={() => setPublishModalOpen(true)}
+            className="self-start sm:self-auto px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all hover:scale-105"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Publish Template</span>
+          </button>
+        </div>
+
+        {/* Search & Category Pills */}
+        <div className="space-y-3 pt-1 border-b border-slate-200 dark:border-slate-800 pb-3">
+          <div className="relative w-full">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+            <input
+              type="text"
+              placeholder="Search templates by keyword, title, or topic..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 rounded-2xl border border-slate-300 dark:border-slate-700 bg-white/70 dark:bg-slate-800/70 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+
+          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            {CATEGORIES.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                  selectedCategory === cat.id
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Publish Sub-form if open */}
+        {publishModalOpen && (
+          <form onSubmit={handlePublishSubmit} className="p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 space-y-3 animate-in fade-in">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold text-indigo-900 dark:text-indigo-200">
+                Publish a New Community Template
+              </h4>
+              <button
+                type="button"
+                onClick={() => setPublishModalOpen(false)}
+                className="text-xs text-slate-400 hover:text-slate-600"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <input
+                type="text"
+                required
+                placeholder="Template Title"
+                value={publishForm.title}
+                onChange={(e) => setPublishForm({ ...publishForm, title: e.target.value })}
+                className="px-3 py-2 rounded-xl text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white"
+              />
+              <select
+                value={publishForm.category}
+                onChange={(e) => setPublishForm({ ...publishForm, category: e.target.value })}
+                className="px-3 py-2 rounded-xl text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white"
+              >
+                <option value="study">Study & Notes</option>
+                <option value="project">Project Management</option>
+                <option value="business">Business Planning</option>
+                <option value="flowchart">Flowchart</option>
+                <option value="mindmap">Mind Map</option>
+              </select>
+            </div>
+            <textarea
+              placeholder="Brief description of what this template provides..."
+              rows={2}
+              value={publishForm.description}
+              onChange={(e) => setPublishForm({ ...publishForm, description: e.target.value })}
+              className="w-full px-3 py-2 rounded-xl text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white"
+            />
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPublishModalOpen(false)}
+                className="px-3 py-1.5 rounded-xl text-xs text-slate-500 hover:bg-slate-200"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold"
+              >
+                Confirm & Share Publicly
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* Templates Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 max-h-[500px] overflow-y-auto pr-1">
+          {/* Built-in Blueprints */}
+          {filteredBlueprints.map((tpl) => {
             const Icon = tpl.icon;
             return (
               <div
                 key={tpl.id}
-                onClick={() => {
-                  onSelectTemplate(tpl);
-                  onClose();
-                }}
-                className="group p-4 rounded-2xl glass-panel border border-slate-200 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-400 shadow-sm hover:shadow-xl transition-all cursor-pointer flex flex-col justify-between"
+                onClick={() => handleUseTemplate(tpl)}
+                className="group p-4 rounded-2xl glass-panel border border-slate-200 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-400 shadow-sm hover:shadow-xl transition-all cursor-pointer flex flex-col justify-between text-left"
               >
                 <div>
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center justify-between mb-2.5">
                     <div
-                      className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-sm"
+                      className="w-9 h-9 rounded-xl flex items-center justify-center text-white shadow-sm"
                       style={{ backgroundColor: tpl.color }}
                     >
-                      <Icon className="w-5 h-5" />
+                      <Icon className="w-4 h-4" />
                     </div>
                     <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
                       {tpl.category}
                     </span>
                   </div>
-                  <h4 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                     {tpl.title}
                   </h4>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">
                     {tpl.description}
                   </p>
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs font-semibold text-indigo-600 dark:text-indigo-400 group-hover:translate-x-1 transition-transform">
-                  <span>Use Template</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+                <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs font-semibold text-indigo-600 dark:text-indigo-400">
+                  <span className="text-[10px] text-slate-400">Official Blueprint</span>
+                  <div className="flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                    <span>Use Template</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </div>
                 </div>
               </div>
             );
           })}
+
+          {/* Dynamic Community Templates */}
+          {communityTemplates.map((tpl) => (
+            <div
+              key={tpl._id || tpl.id}
+              onClick={() => handleUseTemplate(tpl)}
+              className="group p-4 rounded-2xl glass-panel border border-slate-200 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-400 shadow-sm hover:shadow-xl transition-all cursor-pointer flex flex-col justify-between text-left relative"
+            >
+              <div>
+                <div className="flex items-center justify-between mb-2.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800">
+                    {tpl.category}
+                  </span>
+                  <button
+                    onClick={(e) => handleReport(e, tpl._id || tpl.id)}
+                    title="Report inappropriate content"
+                    className="text-slate-400 hover:text-rose-500 transition-colors p-1"
+                  >
+                    {reportSuccessId === (tpl._id || tpl.id) ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-500" />
+                    ) : (
+                      <Flag className="w-3 h-3" />
+                    )}
+                  </button>
+                </div>
+
+                <h4 className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                  {tpl.title}
+                </h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">
+                  {tpl.description || 'Community contributed architecture template.'}
+                </p>
+              </div>
+
+              <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px]">
+                <span className="text-slate-400 truncate max-w-[100px]">
+                  by {tpl.author?.name || 'Community'}
+                </span>
+                <div className="flex items-center gap-2 text-slate-400 font-mono text-[10px]">
+                  <span>⭐ {tpl.likesCount || 0}</span>
+                  <span>🔄 {tpl.clonesCount || 0}</span>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </Modal>
