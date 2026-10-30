@@ -381,3 +381,116 @@ export const duplicateWhiteboard = async (req, res, next) => {
   }
 };
 
+// @desc    Create a version history snapshot
+// @route   POST /api/whiteboards/:id/versions or /api/whiteboards/room/:roomId/versions
+// @access  Public / Private
+export const createVersionSnapshot = async (req, res, next) => {
+  try {
+    const target = req.params.id || req.params.roomId;
+    const { label, title } = req.body;
+
+    let board;
+    if (getIsMongoConnected()) {
+      board = await Whiteboard.findOne({ $or: [{ roomId: target }, { _id: target.match(/^[0-9a-fA-F]{24}$/) ? target : null }] });
+      if (!board) {
+        return res.status(404).json({ success: false, message: 'Whiteboard not found' });
+      }
+
+      const snapshot = {
+        id: `ver_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+        title: label || title || `Snapshot ${new Date().toLocaleTimeString()}`,
+        label: label || title || `Snapshot ${new Date().toLocaleTimeString()}`,
+        timestamp: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        elements: JSON.parse(JSON.stringify(board.elements || [])),
+        thumbnail: board.thumbnail || '',
+      };
+
+      if (!Array.isArray(board.versionHistory)) {
+        board.versionHistory = [];
+      }
+
+      board.versionHistory.push(snapshot);
+      if (board.versionHistory.length > 30) {
+        board.versionHistory.shift();
+      }
+
+      await board.save();
+
+      return res.json({
+        success: true,
+        message: 'Snapshot created successfully',
+        snapshot,
+        versionHistory: board.versionHistory,
+        whiteboard: board,
+      });
+    } else {
+      board = memoryStore.findWhiteboardByRoomId(target) || memoryStore.findWhiteboardById(target);
+      if (!board) {
+        return res.status(404).json({ success: false, message: 'Whiteboard not found' });
+      }
+
+      const snapshot = {
+        id: `ver_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+        title: label || title || `Snapshot ${new Date().toLocaleTimeString()}`,
+        label: label || title || `Snapshot ${new Date().toLocaleTimeString()}`,
+        timestamp: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        elements: JSON.parse(JSON.stringify(board.elements || [])),
+        thumbnail: board.thumbnail || '',
+      };
+
+      if (!Array.isArray(board.versionHistory)) {
+        board.versionHistory = [];
+      }
+
+      board.versionHistory.push(snapshot);
+      const updated = memoryStore.updateWhiteboard(board._id || board.id, { versionHistory: board.versionHistory });
+
+      return res.json({
+        success: true,
+        message: 'Snapshot created successfully',
+        snapshot,
+        versionHistory: board.versionHistory,
+        whiteboard: updated,
+      });
+    }
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get version history snapshots
+// @route   GET /api/whiteboards/:id/versions or /api/whiteboards/room/:roomId/versions
+// @access  Public / Private
+export const getVersionHistory = async (req, res, next) => {
+  try {
+    const target = req.params.id || req.params.roomId;
+
+    let board;
+    if (getIsMongoConnected()) {
+      board = await Whiteboard.findOne({ $or: [{ roomId: target }, { _id: target.match(/^[0-9a-fA-F]{24}$/) ? target : null }] });
+      if (!board) {
+        return res.status(404).json({ success: false, message: 'Whiteboard not found' });
+      }
+      return res.json({
+        success: true,
+        versions: board.versionHistory || [],
+        versionHistory: board.versionHistory || [],
+      });
+    } else {
+      board = memoryStore.findWhiteboardByRoomId(target) || memoryStore.findWhiteboardById(target);
+      if (!board) {
+        return res.status(404).json({ success: false, message: 'Whiteboard not found' });
+      }
+      return res.json({
+        success: true,
+        versions: board.versionHistory || [],
+        versionHistory: board.versionHistory || [],
+      });
+    }
+  } catch (error) {
+    next(error);
+  }
+};
+

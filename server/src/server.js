@@ -86,6 +86,7 @@ app.get('/api/health', (req, res) => {
 // Mount Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/whiteboards', whiteboardRoutes);
+app.use('/api/whiteboard', whiteboardRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/tasks', taskRoutes);
 

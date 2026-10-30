@@ -7,6 +7,8 @@ import {
   saveWhiteboardState,
   deleteWhiteboard,
   duplicateWhiteboard,
+  createVersionSnapshot,
+  getVersionHistory,
 } from '../controllers/whiteboardController.js';
 import { protect, optionalAuth } from '../middleware/auth.js';
 
@@ -19,6 +21,10 @@ router.get('/:roomId', optionalAuth, getWhiteboardByRoomId);
 router.post('/:id/duplicate', protect, duplicateWhiteboard);
 router.put('/:id', protect, updateWhiteboard);
 router.put('/room/:roomId/save', optionalAuth, saveWhiteboardState);
+router.post('/:id/versions', optionalAuth, createVersionSnapshot);
+router.get('/:id/versions', optionalAuth, getVersionHistory);
+router.post('/room/:roomId/versions', optionalAuth, createVersionSnapshot);
+router.get('/room/:roomId/versions', optionalAuth, getVersionHistory);
 router.delete('/:id', protect, deleteWhiteboard);
 
 export default router;

@@ -100,6 +100,7 @@ class MemoryStore {
       thumbnail: boardData.thumbnail || '',
       collaborators: boardData.collaborators || [],
       isPublic: boardData.isPublic !== undefined ? boardData.isPublic : true,
+      versionHistory: boardData.versionHistory || [],
       createdAt: boardData.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };

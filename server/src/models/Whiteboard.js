@@ -37,6 +37,10 @@ const whiteboardSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    versionHistory: {
+      type: Array,
+      default: [],
+    },
   },
   {
     timestamps: true,

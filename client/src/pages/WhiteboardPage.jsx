@@ -198,6 +198,7 @@ const WhiteboardPage = () => {
           setHistoryStep(0);
           setVersionCheckpoints([
             { id: 'v_init', title: 'Initial Load', elements: loadedElements, timestamp: new Date().toISOString() },
+            ...(wb.versionHistory || []),
           ]);
 
           if (initialElements.length > 0) {
