@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   renderElement,
   isPointNearElement,
@@ -7,6 +8,8 @@ import {
   getElementBoundingBox,
   findNearestAnchorPoint,
   renderLaserTrail,
+  computeAlignmentGuides,
+  renderAlignmentGuides,
 } from '../../utils/canvasUtils';
 import {
   Copy,
@@ -18,6 +21,7 @@ import {
   ArrowDownToLine,
   Layers,
   Sparkles,
+  RotateCw,
 } from 'lucide-react';
 
 const Canvas = ({
@@ -60,6 +64,8 @@ const Canvas = ({
 
   // Laser Pointer Trail
   const laserTrailRef = useRef([]);
+  const activeGuidesRef = useRef(null);
+  const lastPinchDistRef = useRef(null);
 
   // Move / Drag state for selected element
   const isDraggingSelectionRef = useRef(false);
@@ -176,6 +182,11 @@ const Canvas = ({
       ctx.fillRect(marqueeBox.x, marqueeBox.y, marqueeBox.w, marqueeBox.h);
       ctx.strokeRect(marqueeBox.x, marqueeBox.y, marqueeBox.w, marqueeBox.h);
       ctx.restore();
+    }
+
+    // Render Dynamic Alignment Guides
+    if (activeGuidesRef.current) {
+      renderAlignmentGuides(ctx, activeGuidesRef.current);
     }
 
     ctx.restore();
@@ -437,11 +448,30 @@ const Canvas = ({
       return;
     }
 
-    // Handle Resizing an Element
+    // Handle Resizing or Rotating an Element
     if (activeHandleRef.current && selectedElements.length === 1) {
       const handle = activeHandleRef.current;
       const orig = initialElementStateRef.current;
       if (!orig) return;
+
+      if (handle === 'rot') {
+        const box = getElementBoundingBox(orig);
+        if (box) {
+          const cx = (box.minX + box.maxX) / 2;
+          const cy = (box.minY + box.maxY) / 2;
+          // Calculate angle from element center to current mouse position
+          const rad = Math.atan2(y - cy, x - cx) + Math.PI / 2;
+          const deg = (rad * 180) / Math.PI;
+          // Hold Shift to snap to 15-degree steps, otherwise smooth 2-degree snap
+          const step = e.shiftKey ? 15 : 2;
+          const snappedDeg = Math.round(deg / step) * step;
+          const snappedRad = (snappedDeg * Math.PI) / 180;
+          const updated = { ...orig, angle: snappedRad };
+          onUpdateElement(updated);
+          setSelectedElements([updated]);
+        }
+        return;
+      }
 
       const updated = { ...orig };
       if (handle.includes('e')) updated.x2 = snap(x);
@@ -454,10 +484,42 @@ const Canvas = ({
       return;
     }
 
-    // Handle Dragging / Moving Selected Elements
+    // Handle Dragging / Moving Selected Elements with Dynamic Alignment Guides
     if (isDraggingSelectionRef.current && selectedElements.length > 0) {
-      const dx = snap(x - dragStartRef.current.x);
-      const dy = snap(y - dragStartRef.current.y);
+      let rawDx = x - dragStartRef.current.x;
+      let rawDy = y - dragStartRef.current.y;
+
+      // Compute bounding box of selection
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      selectedElements.forEach((el) => {
+        const b = getElementBoundingBox(el);
+        if (b) {
+          minX = Math.min(minX, b.minX);
+          minY = Math.min(minY, b.minY);
+          maxX = Math.max(maxX, b.maxX);
+          maxY = Math.max(maxY, b.maxY);
+        }
+      });
+
+      const selectedIds = new Set(selectedElements.map((e) => e.id));
+      const otherElements = elements.filter((e) => !selectedIds.has(e.id));
+
+      if (minX !== Infinity && otherElements.length > 0) {
+        const draggedBox = { minX: minX + rawDx, maxX: maxX + rawDx, minY: minY + rawDy, maxY: maxY + rawDy };
+        const guidesResult = computeAlignmentGuides(draggedBox, otherElements, 8);
+        if (guidesResult.lines.length > 0) {
+          rawDx += guidesResult.deltaX;
+          rawDy += guidesResult.deltaY;
+          activeGuidesRef.current = guidesResult;
+        } else {
+          activeGuidesRef.current = null;
+        }
+      } else {
+        activeGuidesRef.current = null;
+      }
+
+      const dx = snap(rawDx);
+      const dy = snap(rawDy);
 
       if (dx !== 0 || dy !== 0) {
         selectedElements.forEach((sel) => {
@@ -477,9 +539,34 @@ const Canvas = ({
           onUpdateElement(updated);
         });
 
-        dragStartRef.current = { x, y };
+        dragStartRef.current = { x: dragStartRef.current.x + dx, y: dragStartRef.current.y + dy };
       }
+      redrawCanvas();
       return;
+    }
+
+    // Dynamic Cursor feedback when hovering handles
+    if (
+      activeTool === 'select' &&
+      selectedElements.length === 1 &&
+      !isDraggingSelectionRef.current &&
+      !activeHandleRef.current &&
+      canvasRef.current
+    ) {
+      const h = getHandleAtPoint(x, y, selectedElements[0]);
+      if (h === 'rot') {
+        canvasRef.current.style.cursor = 'grab';
+      } else if (h === 'nw' || h === 'se') {
+        canvasRef.current.style.cursor = 'nwse-resize';
+      } else if (h === 'ne' || h === 'sw') {
+        canvasRef.current.style.cursor = 'nesw-resize';
+      } else if (h === 'n' || h === 's') {
+        canvasRef.current.style.cursor = 'ns-resize';
+      } else if (h === 'e' || h === 'w') {
+        canvasRef.current.style.cursor = 'ew-resize';
+      } else {
+        canvasRef.current.style.cursor = getCursorStyle();
+      }
     }
 
     // Handle Marquee Dragging
@@ -540,6 +627,11 @@ const Canvas = ({
 
   // Mouse Up
   const handleMouseUp = () => {
+    if (activeGuidesRef.current) {
+      activeGuidesRef.current = null;
+      redrawCanvas();
+    }
+
     if (activeTool === 'laser') {
       isDrawingRef.current = false;
       setTimeout(() => {
@@ -598,6 +690,63 @@ const Canvas = ({
     }
   };
 
+  // Touch Event Handlers for Mobile & Tablet Gesture Support
+  const handleTouchStart = (e) => {
+    if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      handleMouseDown({
+        clientX: touch.clientX,
+        clientY: touch.clientY,
+        button: 0,
+        preventDefault: () => e.preventDefault(),
+        stopPropagation: () => e.stopPropagation(),
+      });
+    } else if (e.touches.length === 2) {
+      isPanningRef.current = true;
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      const midX = (touch1.clientX + touch2.clientX) / 2;
+      const midY = (touch1.clientY + touch2.clientY) / 2;
+      panStartRef.current = { x: midX - pan.x, y: midY - pan.y };
+      lastPinchDistRef.current = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
+    }
+  };
+
+  const handleTouchMove = (e) => {
+    if (e.touches.length === 1 && !isPanningRef.current) {
+      const touch = e.touches[0];
+      handleMouseMove({
+        clientX: touch.clientX,
+        clientY: touch.clientY,
+        preventDefault: () => e.preventDefault(),
+        stopPropagation: () => e.stopPropagation(),
+      });
+    } else if (e.touches.length === 2 && isPanningRef.current) {
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      const midX = (touch1.clientX + touch2.clientX) / 2;
+      const midY = (touch1.clientY + touch2.clientY) / 2;
+      setPan({
+        x: midX - panStartRef.current.x,
+        y: midY - panStartRef.current.y,
+      });
+
+      const dist = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
+      if (lastPinchDistRef.current && dist > 10) {
+        const factor = dist / lastPinchDistRef.current;
+        if (Math.abs(factor - 1) > 0.02) {
+          setZoom((prev) => Math.min(3, Math.max(0.2, prev * factor)));
+          lastPinchDistRef.current = dist;
+        }
+      }
+    }
+  };
+
+  const handleTouchEnd = () => {
+    lastPinchDistRef.current = null;
+    handleMouseUp();
+  };
+
   // Erase element near coordinates
   const eraseElementAt = (cx, cy) => {
     for (let i = elements.length - 1; i >= 0; i--) {
@@ -638,6 +787,7 @@ const Canvas = ({
     if (isPanningRef.current) return 'grabbing';
     if (activeTool === 'laser') return 'crosshair';
     if (activeTool === 'select') {
+      if (activeHandleRef.current === 'rot') return 'grab';
       if (activeHandleRef.current) return 'nwse-resize';
       return isDraggingSelectionRef.current ? 'grabbing' : 'default';
     }
@@ -682,6 +832,10 @@ const Canvas = ({
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
         onContextMenu={handleContextMenu}
         style={{ cursor: getCursorStyle() }}
         className="block touch-none"
@@ -737,6 +891,23 @@ const Canvas = ({
             className="p-1.5 rounded-lg text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors"
           >
             <CheckSquare className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Quick Rotate 90° */}
+          <button
+            onClick={() => {
+              selectedElements.forEach((el) => {
+                const currentAngle = el.angle || 0;
+                onUpdateElement({
+                  ...el,
+                  angle: (currentAngle + Math.PI / 2) % (Math.PI * 2),
+                });
+              });
+            }}
+            title="Rotate 90°"
+            className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          >
+            <RotateCw className="w-3.5 h-3.5" />
           </button>
 
           {/* Duplicate */}

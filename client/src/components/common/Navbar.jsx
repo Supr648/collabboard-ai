@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import UserProfileModal from '../dashboard/UserProfileModal';
@@ -15,15 +16,63 @@ import {
   ChevronDown,
   Activity,
   Settings,
+  Bell,
+  CheckCircle2,
+  Command,
+  Clock,
+  Radio,
 } from 'lucide-react';
 
-const Navbar = ({ onNewBoard, onOpenTemplates }) => {
+const MOCK_NOTIFICATIONS = [
+  {
+    id: 'notif_1',
+    title: 'Cloud Architecture synced',
+    desc: 'Auto-saved 14 visual elements to cloud',
+    time: '2m ago',
+    type: 'success',
+  },
+  {
+    id: 'notif_2',
+    title: 'Collaborator active',
+    desc: 'Alex M. connected to live room',
+    time: '12m ago',
+    type: 'info',
+  },
+  {
+    id: 'notif_3',
+    title: 'Task Assigned',
+    desc: 'CRDT conflict vector task moved to In Progress',
+    time: '1h ago',
+    type: 'task',
+  },
+];
+
+const Navbar = ({ onNewBoard, onOpenTemplates, onOpenCommandPalette }) => {
   const { user, isAuthenticated, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [notifsOpen, setNotifsOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [activityModalOpen, setActivityModalOpen] = useState(false);
+  const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS);
+  const [hasUnread, setHasUnread] = useState(true);
+
+  const profileRef = useRef(null);
+  const notifRef = useRef(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (profileRef.current && !profileRef.current.contains(e.target)) {
+        setDropdownOpen(false);
+      }
+      if (notifRef.current && !notifRef.current.contains(e.target)) {
+        setNotifsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -32,10 +81,10 @@ const Navbar = ({ onNewBoard, onOpenTemplates }) => {
 
   return (
     <>
-      <nav className="h-16 px-6 glass-panel border-b border-slate-200 dark:border-slate-800 flex items-center justify-between sticky top-0 z-30 transition-colors">
+      <nav className="h-16 px-5 sm:px-6 glass-panel border-b border-slate-200 dark:border-slate-800 flex items-center justify-between sticky top-0 z-30 transition-colors bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl">
         {/* Brand Logo */}
         <Link to="/" className="flex items-center gap-2.5 group">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform relative">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform relative">
             <Sparkles className="w-5 h-5" />
             <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-pink-400 opacity-75"></span>
@@ -44,58 +93,136 @@ const Navbar = ({ onNewBoard, onOpenTemplates }) => {
           </div>
           <div className="flex flex-col text-left">
             <div className="flex items-center gap-1.5">
-              <span className="font-bold text-lg leading-tight bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent">
+              <span className="font-bold text-base sm:text-lg leading-tight bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent">
                 CollabBoard
               </span>
-              <span className="px-1.5 py-0.2 rounded-md bg-gradient-to-r from-indigo-500 to-purple-600 text-[10px] font-black text-white uppercase tracking-wider">
+              <span className="px-1.5 py-0.2 rounded-md bg-gradient-to-r from-indigo-500 to-purple-600 text-[9px] font-black text-white uppercase tracking-wider">
                 AI
               </span>
             </div>
-            <span className="text-[10px] tracking-wider uppercase font-semibold text-indigo-600 dark:text-indigo-400">
+            <span className="text-[9px] tracking-wider uppercase font-semibold text-indigo-600 dark:text-indigo-400 hidden sm:block">
               Intelligent Workspace
             </span>
           </div>
         </Link>
 
         {/* Right Controls */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Quick Command Palette Launcher */}
+          {onOpenCommandPalette && (
+            <button
+              onClick={onOpenCommandPalette}
+              title="Quick Command Palette (Ctrl+K)"
+              className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200/80 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 text-xs font-medium border border-slate-200/80 dark:border-slate-700/80 transition-colors"
+            >
+              <Command className="w-3.5 h-3.5 text-indigo-500" />
+              <span>Search & Commands...</span>
+              <kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 text-[10px] font-mono font-bold text-slate-400 border border-slate-200 dark:border-slate-700">
+                Ctrl K
+              </kbd>
+            </button>
+          )}
+
           {/* Theme Toggle Button */}
           <button
             onClick={toggleTheme}
             aria-label="Toggle theme"
             className="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
-            {theme === 'dark' ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5" />}
+            {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
           </button>
 
           {isAuthenticated ? (
             <>
+              {/* Notification Center */}
+              <div className="relative" ref={notifRef}>
+                <button
+                  onClick={() => {
+                    setNotifsOpen(!notifsOpen);
+                    setHasUnread(false);
+                  }}
+                  title="Notifications"
+                  className="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors relative"
+                >
+                  <Bell className="w-4 h-4" />
+                  {hasUnread && (
+                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-slate-900 animate-pulse" />
+                  )}
+                </button>
+
+                <AnimatePresence>
+                  {notifsOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.94, y: 4 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.94, y: 4 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 mt-2 w-80 rounded-2xl glass-panel shadow-2xl p-3 z-50 border border-slate-200/90 dark:border-slate-700/90 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl"
+                    >
+                      <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 dark:border-slate-800 px-1">
+                        <span className="text-xs font-bold text-slate-900 dark:text-white">
+                          Activity & Notifications
+                        </span>
+                        <span className="text-[10px] text-indigo-500 font-semibold cursor-pointer" onClick={() => setNotifications([])}>
+                          Clear all
+                        </span>
+                      </div>
+
+                      <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                        {notifications.length === 0 ? (
+                          <div className="py-6 text-center text-xs text-slate-400">
+                            No unread notifications.
+                          </div>
+                        ) : (
+                          notifications.map((n) => (
+                            <div
+                              key={n.id}
+                              className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors text-left"
+                            >
+                              <div className="flex items-center justify-between">
+                                <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                                  {n.title}
+                                </p>
+                                <span className="text-[10px] text-slate-400">{n.time}</span>
+                              </div>
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                {n.desc}
+                              </p>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
               <Link
                 to="/dashboard"
-                className="hidden sm:flex items-center gap-2 text-sm font-medium px-3.5 py-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                className="hidden sm:flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
-                <LayoutDashboard className="w-4 h-4 text-indigo-500" />
-                Dashboard
+                <LayoutDashboard className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Dashboard</span>
               </Link>
 
               {onNewBoard && (
                 <button
                   onClick={onNewBoard}
-                  className="flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm shadow-indigo-500/30 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                  className="flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-sm shadow-indigo-500/25 transition-all hover:scale-105 active:scale-95"
                 >
-                  <Plus className="w-4 h-4" />
+                  <Plus className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">New Board</span>
                 </button>
               )}
 
               {/* User Profile Dropdown */}
-              <div className="relative">
+              <div className="relative" ref={profileRef}>
                 <button
                   onClick={() => setDropdownOpen(!dropdownOpen)}
-                  className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  className="flex items-center gap-2 p-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                 >
                   <div
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold uppercase shadow-sm"
+                    className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-bold uppercase shadow-sm"
                     style={{ backgroundColor: user?.avatarColor || '#6366f1' }}
                   >
                     {user?.name ? user.name[0] : 'U'}
@@ -103,75 +230,80 @@ const Navbar = ({ onNewBoard, onOpenTemplates }) => {
                   <ChevronDown className="w-3.5 h-3.5 text-slate-400 hidden sm:block" />
                 </button>
 
-                {dropdownOpen && (
-                  <div
-                    className="absolute right-0 mt-2 w-60 rounded-2xl glass-panel shadow-2xl py-2 z-50 border border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in-95 duration-150"
-                    onMouseLeave={() => setDropdownOpen(false)}
-                  >
-                    <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-800">
-                      <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">
-                        {user?.name}
-                      </p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                        {user?.email}
-                      </p>
-                    </div>
-
-                    <Link
-                      to="/dashboard"
-                      onClick={() => setDropdownOpen(false)}
-                      className="flex items-center gap-2.5 px-4 py-2.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                <AnimatePresence>
+                  {dropdownOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.94, y: 4 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.94, y: 4 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 mt-2 w-60 rounded-2xl glass-panel shadow-2xl py-2 z-50 border border-slate-200/90 dark:border-slate-700/90 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl"
                     >
-                      <LayoutDashboard className="w-4 h-4 text-slate-400" />
-                      Workspace Boards
-                    </Link>
+                      <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-800">
+                        <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                          {user?.name}
+                        </p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                          {user?.email}
+                        </p>
+                      </div>
 
-                    <button
-                      onClick={() => {
-                        setDropdownOpen(false);
-                        setProfileModalOpen(true);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                    >
-                      <Settings className="w-4 h-4 text-slate-400" />
-                      Profile & Settings
-                    </button>
+                      <Link
+                        to="/dashboard"
+                        onClick={() => setDropdownOpen(false)}
+                        className="flex items-center gap-2.5 px-4 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                      >
+                        <LayoutDashboard className="w-4 h-4 text-slate-400" />
+                        Workspace Boards
+                      </Link>
 
-                    <button
-                      onClick={() => {
-                        setDropdownOpen(false);
-                        setActivityModalOpen(true);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                    >
-                      <Activity className="w-4 h-4 text-slate-400" />
-                      Activity Log
-                    </button>
+                      <button
+                        onClick={() => {
+                          setDropdownOpen(false);
+                          setProfileModalOpen(true);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                      >
+                        <Settings className="w-4 h-4 text-slate-400" />
+                        Profile & Settings
+                      </button>
 
-                    <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+                      <button
+                        onClick={() => {
+                          setDropdownOpen(false);
+                          setActivityModalOpen(true);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                      >
+                        <Activity className="w-4 h-4 text-slate-400" />
+                        Activity Log
+                      </button>
 
-                    <button
-                      onClick={handleLogout}
-                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
-                    >
-                      <LogOut className="w-4 h-4" />
-                      Sign Out
-                    </button>
-                  </div>
-                )}
+                      <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+
+                      <button
+                        onClick={handleLogout}
+                        className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        Sign Out
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </>
           ) : (
             <div className="flex items-center gap-2">
               <Link
                 to="/login"
-                className="text-sm font-medium px-4 py-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                className="text-xs font-semibold px-3.5 py-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
                 Sign In
               </Link>
               <Link
                 to="/register"
-                className="text-sm font-medium px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-sm shadow-indigo-500/30 transition-all hover:scale-[1.02]"
+                className="text-xs font-bold px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-sm shadow-indigo-500/30 transition-all hover:scale-[1.02]"
               >
                 Get Started Free
               </Link>

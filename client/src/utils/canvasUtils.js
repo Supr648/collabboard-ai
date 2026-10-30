@@ -26,6 +26,16 @@ export const renderElement = (ctx, el, imageCache = {}) => {
 
   ctx.save();
   ctx.globalAlpha = el.opacity !== undefined ? el.opacity : 1;
+
+  // Object rotation transform around center
+  if (typeof el.angle === 'number' && el.angle !== 0) {
+    const cx = el.x !== undefined ? el.x : ((el.x1 || 0) + (el.x2 || 0)) / 2;
+    const cy = el.y !== undefined ? el.y : ((el.y1 || 0) + (el.y2 || 0)) / 2;
+    ctx.translate(cx, cy);
+    ctx.rotate(el.angle);
+    ctx.translate(-cx, -cy);
+  }
+
   ctx.strokeStyle = el.strokeColor || '#1e293b';
   ctx.fillStyle = el.fillColor || 'transparent';
   ctx.lineWidth = el.strokeWidth || 3;
@@ -427,7 +437,7 @@ export const getElementBoundingBox = (el) => {
   };
 };
 
-// Render selection outline with 8 corner/edge resize handles
+// Render selection outline with 4 corner resize handles and rotation stem
 export const renderSelectionOutline = (ctx, selectedElements) => {
   if (!selectedElements || selectedElements.length === 0) return;
 
@@ -436,6 +446,16 @@ export const renderSelectionOutline = (ctx, selectedElements) => {
     if (!box) return;
 
     ctx.save();
+
+    // If element is rotated, rotate the selection outline around the same center
+    if (typeof el.angle === 'number' && el.angle !== 0) {
+      const cx = (box.minX + box.maxX) / 2;
+      const cy = (box.minY + box.maxY) / 2;
+      ctx.translate(cx, cy);
+      ctx.rotate(el.angle);
+      ctx.translate(-cx, -cy);
+    }
+
     ctx.strokeStyle = '#6366f1';
     ctx.lineWidth = 1.5;
     ctx.setLineDash([4, 4]);
@@ -462,14 +482,53 @@ export const renderSelectionOutline = (ctx, selectedElements) => {
       ctx.strokeRect(c.x - handleSize / 2, c.y - handleSize / 2, handleSize, handleSize);
     });
 
+    // Draw Rotation Stem & Circular Handle above top-center
+    const topCenterX = (box.minX + box.maxX) / 2;
+    const topCenterY = box.minY - pad;
+    const rotY = topCenterY - 22;
+
+    ctx.beginPath();
+    ctx.moveTo(topCenterX, topCenterY);
+    ctx.lineTo(topCenterX, rotY);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(topCenterX, rotY, 4.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.stroke();
+
     ctx.restore();
   });
 };
 
-// Check if point hits resize handle: returns 'nw' | 'ne' | 'se' | 'sw' | null
+// Check if point hits resize handle: returns 'nw' | 'ne' | 'se' | 'sw' | 'rot' | null
 export const getHandleAtPoint = (px, py, element, pad = 6, handleSize = 10) => {
   const box = getElementBoundingBox(element);
   if (!box) return null;
+
+  let testX = px;
+  let testY = py;
+
+  // If rotated, un-rotate point around center to test handles
+  if (typeof element.angle === 'number' && element.angle !== 0) {
+    const cx = (box.minX + box.maxX) / 2;
+    const cy = (box.minY + box.maxY) / 2;
+    const rad = -element.angle;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    const dx = px - cx;
+    const dy = py - cy;
+    testX = cx + dx * cos - dy * sin;
+    testY = cy + dx * sin + dy * cos;
+  }
+
+  // Check rotation handle
+  const topCenterX = (box.minX + box.maxX) / 2;
+  const rotY = box.minY - pad - 22;
+  if (Math.hypot(testX - topCenterX, testY - rotY) <= handleSize) {
+    return 'rot';
+  }
 
   const corners = {
     nw: { x: box.minX - pad, y: box.minY - pad },
@@ -479,12 +538,95 @@ export const getHandleAtPoint = (px, py, element, pad = 6, handleSize = 10) => {
   };
 
   for (const [pos, c] of Object.entries(corners)) {
-    if (Math.hypot(px - c.x, py - c.y) <= handleSize) {
+    if (Math.hypot(testX - c.x, testY - c.y) <= handleSize) {
       return pos;
     }
   }
 
   return null;
+};
+
+// Compute Dynamic Alignment Snapping Guides for visual crosshairs
+export const computeAlignmentGuides = (draggedBox, otherElements = [], threshold = 6) => {
+  const guides = { xLines: [], yLines: [], deltaX: 0, deltaY: 0 };
+  if (!draggedBox || !otherElements.length) return guides;
+
+  const dragCenterX = (draggedBox.minX + draggedBox.maxX) / 2;
+  const dragCenterY = (draggedBox.minY + draggedBox.maxY) / 2;
+
+  let bestDiffX = Infinity;
+  let bestDiffY = Infinity;
+
+  otherElements.forEach((el) => {
+    const ob = getElementBoundingBox(el);
+    if (!ob) return;
+    const obCenterX = (ob.minX + ob.maxX) / 2;
+    const obCenterY = (ob.minY + ob.maxY) / 2;
+
+    // X alignment candidates: left-to-left, right-to-right, center-to-center
+    const xPairs = [
+      { drag: draggedBox.minX, target: ob.minX },
+      { drag: draggedBox.maxX, target: ob.maxX },
+      { drag: dragCenterX, target: obCenterX },
+      { drag: draggedBox.minX, target: ob.maxX },
+      { drag: draggedBox.maxX, target: ob.minX },
+    ];
+
+    xPairs.forEach((p) => {
+      const diff = p.target - p.drag;
+      if (Math.abs(diff) <= threshold && Math.abs(diff) < Math.abs(bestDiffX)) {
+        bestDiffX = diff;
+        guides.xLines = [p.target];
+        guides.deltaX = diff;
+      }
+    });
+
+    // Y alignment candidates: top-to-top, bottom-to-bottom, center-to-center
+    const yPairs = [
+      { drag: draggedBox.minY, target: ob.minY },
+      { drag: draggedBox.maxY, target: ob.maxY },
+      { drag: dragCenterY, target: obCenterY },
+      { drag: draggedBox.minY, target: ob.maxY },
+      { drag: draggedBox.maxY, target: ob.minY },
+    ];
+
+    yPairs.forEach((p) => {
+      const diff = p.target - p.drag;
+      if (Math.abs(diff) <= threshold && Math.abs(diff) < Math.abs(bestDiffY)) {
+        bestDiffY = diff;
+        guides.yLines = [p.target];
+        guides.deltaY = diff;
+      }
+    });
+  });
+
+  return guides;
+};
+
+// Render Alignment Guide Lines across viewport
+export const renderAlignmentGuides = (ctx, guides) => {
+  if (!guides || (!guides.xLines?.length && !guides.yLines?.length)) return;
+
+  ctx.save();
+  ctx.strokeStyle = '#06b6d4';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+
+  guides.xLines.forEach((x) => {
+    ctx.beginPath();
+    ctx.moveTo(x, -50000);
+    ctx.lineTo(x, 50000);
+    ctx.stroke();
+  });
+
+  guides.yLines.forEach((y) => {
+    ctx.beginPath();
+    ctx.moveTo(-50000, y);
+    ctx.lineTo(50000, y);
+    ctx.stroke();
+  });
+
+  ctx.restore();
 };
 
 // Proximity check for selection or eraser

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Navbar from '../components/common/Navbar';
+import PageTransition from '../components/common/PageTransition';
 import {
   Sparkles,
   ArrowRight,
@@ -93,8 +94,9 @@ const LandingPage = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 selection:bg-indigo-500 selection:text-white">
-      <Navbar />
+    <PageTransition>
+      <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 selection:bg-indigo-500 selection:text-white">
+        <Navbar />
 
       {/* Hero Section */}
       <section className="relative pt-14 pb-20 px-6 sm:px-12 max-w-7xl mx-auto flex flex-col items-center text-center">
@@ -286,6 +288,7 @@ const LandingPage = () => {
         <p>© 2026 CollabBoard AI • Intelligent Real-Time Collaborative Workspace Portfolio Project</p>
       </footer>
     </div>
+  </PageTransition>
   );
 };
 

@@ -21,6 +21,8 @@ import VersionHistoryModal from '../components/whiteboard/VersionHistoryModal';
 import ShareModal from '../components/whiteboard/ShareModal';
 import Modal from '../components/common/Modal';
 import Toast from '../components/common/Toast';
+import CommandPalette from '../components/common/CommandPalette';
+import ShortcutsModal from '../components/common/ShortcutsModal';
 import {
   exportBoardAsPNG,
   exportBoardAsSVG,
@@ -43,6 +45,9 @@ import {
   Radio,
   Presentation,
   CheckSquare,
+  Download,
+  Grid,
+  Trash2,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -100,6 +105,8 @@ const WhiteboardPage = () => {
   const [taskToConvert, setTaskToConvert] = useState(null);
   const [templatesModalOpen, setTemplatesModalOpen] = useState(false);
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [toast, setToast] = useState({ message: '', type: 'info' });
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
 
@@ -632,10 +639,86 @@ const WhiteboardPage = () => {
     exportBoardAsPDF(elements, title, isDark);
   };
 
+  const whiteboardCommands = [
+    {
+      id: 'cmd_export_png',
+      category: 'Canvas Export',
+      title: 'Export as High-Res PNG',
+      subtitle: 'Download the current board drawing as a PNG image',
+      icon: Download,
+      action: handleExportPNG,
+    },
+    {
+      id: 'cmd_export_svg',
+      category: 'Canvas Export',
+      title: 'Export as Vector SVG',
+      subtitle: 'Download vector graphic file with clean paths',
+      icon: Download,
+      action: handleExportSVG,
+    },
+    {
+      id: 'cmd_export_pdf',
+      category: 'Canvas Export',
+      title: 'Export as PDF Document',
+      subtitle: 'Generate formatted multi-page printable PDF',
+      icon: Download,
+      action: handleExportPDF,
+    },
+    {
+      id: 'cmd_toggle_grid',
+      category: 'Canvas Options',
+      title: `Toggle Grid Snapping (${snapToGrid ? 'Active' : 'Off'})`,
+      subtitle: 'Snap coordinates to 20px magnetic alignment grid',
+      icon: Grid,
+      action: () => setSnapToGrid(!snapToGrid),
+    },
+    {
+      id: 'cmd_fit_screen',
+      category: 'Canvas Navigation',
+      title: 'Fit to Content',
+      subtitle: 'Center and auto-zoom to fit all shapes',
+      icon: Maximize2,
+      action: handleFitToScreen,
+    },
+    {
+      id: 'cmd_presentation',
+      category: 'Collaboration',
+      title: 'Start Presentation Mode',
+      subtitle: 'Present frame slides full-screen to collaborators',
+      icon: Presentation,
+      action: () => {
+        setIsPresentation(true);
+        if (frames.length > 0) navigateToFrame(0);
+      },
+    },
+    {
+      id: 'cmd_clear_board',
+      category: 'Destructive',
+      title: 'Clear Entire Canvas',
+      subtitle: 'Wipe all drawings and shapes on this whiteboard',
+      icon: Trash2,
+      action: () => setClearModalOpen(true),
+    },
+  ];
+
   // Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
+
+      // Command Palette (Ctrl+K)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setCommandPaletteOpen((prev) => !prev);
+        return;
+      }
+
+      // Shortcuts Guide (?)
+      if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        setShortcutsOpen((prev) => !prev);
+        return;
+      }
 
       // Undo / Redo
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
@@ -1019,6 +1102,23 @@ const WhiteboardPage = () => {
           </div>
         </div>
       </Modal>
+
+      {/* Universal Command Palette (Ctrl+K) */}
+      <CommandPalette
+        isOpen={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        onOpenTemplates={() => setTemplatesModalOpen(true)}
+        onOpenShortcuts={() => setShortcutsOpen(true)}
+        onOpenTasks={() => setTasksModalOpen(true)}
+        onOpenAi={() => setAiModalOpen(true)}
+        customCommands={whiteboardCommands}
+      />
+
+      {/* Global Keyboard Shortcuts Guide (?) */}
+      <ShortcutsModal
+        isOpen={shortcutsOpen}
+        onClose={() => setShortcutsOpen(false)}
+      />
 
       {/* Toast Notification */}
       {toast.message && (

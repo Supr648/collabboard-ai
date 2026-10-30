@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Navbar from '../components/common/Navbar';
+import PageTransition from '../components/common/PageTransition';
 import { Sparkles, Mail, Lock, ArrowRight, AlertCircle } from 'lucide-react';
 
 const LoginPage = () => {
@@ -40,8 +41,9 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
-      <Navbar />
+    <PageTransition>
+      <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+        <Navbar />
 
       <div className="flex-1 flex items-center justify-center p-6 relative">
         {/* Ambient glow background */}
@@ -132,6 +134,7 @@ const LoginPage = () => {
         </div>
       </div>
     </div>
+  </PageTransition>
   );
 };
 

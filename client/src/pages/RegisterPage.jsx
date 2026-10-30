@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Navbar from '../components/common/Navbar';
+import PageTransition from '../components/common/PageTransition';
 import { Sparkles, User, Mail, Lock, ArrowRight, AlertCircle } from 'lucide-react';
 
 const RegisterPage = () => {
@@ -38,8 +39,9 @@ const RegisterPage = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
-      <Navbar />
+    <PageTransition>
+      <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+        <Navbar />
 
       <div className="flex-1 flex items-center justify-center p-6 relative">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-purple-500/15 blur-[120px] rounded-full pointer-events-none" />
@@ -133,6 +135,7 @@ const RegisterPage = () => {
         </div>
       </div>
     </div>
+  </PageTransition>
   );
 };
 

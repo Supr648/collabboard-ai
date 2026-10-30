@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Undo2,
   Redo2,
@@ -49,7 +50,12 @@ const ActionControls = ({
   return (
     <>
       {/* Bottom Left Controls: Undo, Redo, Zoom, Grid, Fit */}
-      <div className="fixed bottom-6 left-6 z-40 flex items-center gap-2 flex-wrap">
+      <motion.div
+        initial={{ y: 20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+        className="fixed bottom-6 left-6 z-40 flex items-center gap-2 flex-wrap"
+      >
         {/* Undo / Redo */}
         <div className="glass-panel p-1 rounded-2xl shadow-xl flex items-center border border-slate-200/90 dark:border-slate-700/90">
           <button
@@ -127,10 +133,15 @@ const ActionControls = ({
           <Tv className="w-4 h-4 text-purple-500" />
           <span className="hidden sm:inline">Present</span>
         </button>
-      </div>
+      </motion.div>
 
       {/* Bottom Right Controls: Clear & Multi-Format Export */}
-      <div className="fixed bottom-6 right-6 z-40 flex items-center gap-2">
+      <motion.div
+        initial={{ y: 20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+        className="fixed bottom-6 right-6 z-40 flex items-center gap-2"
+      >
         <button
           onClick={onClearCanvas}
           title="Clear Entire Canvas"
@@ -160,42 +171,50 @@ const ActionControls = ({
             </button>
           </div>
 
-          {exportMenuOpen && (
-            <div className="absolute right-0 bottom-12 w-44 rounded-2xl glass-panel shadow-2xl p-1.5 border border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in-95 z-50">
-              <button
-                onClick={() => {
-                  setExportMenuOpen(false);
-                  onExportPNG();
-                }}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+          <AnimatePresence>
+            {exportMenuOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                transition={{ duration: 0.12 }}
+                className="absolute right-0 bottom-12 w-48 rounded-2xl glass-panel shadow-2xl p-1.5 border border-slate-200 dark:border-slate-700 z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md"
               >
-                <FileImage className="w-4 h-4 text-indigo-500" />
-                <span>PNG Image (2x)</span>
-              </button>
-              <button
-                onClick={() => {
-                  setExportMenuOpen(false);
-                  onExportSVG();
-                }}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
-              >
-                <Code className="w-4 h-4 text-emerald-500" />
-                <span>Vector SVG</span>
-              </button>
-              <button
-                onClick={() => {
-                  setExportMenuOpen(false);
-                  onExportPDF();
-                }}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
-              >
-                <FileText className="w-4 h-4 text-rose-500" />
-                <span>PDF Document</span>
-              </button>
-            </div>
-          )}
+                <button
+                  onClick={() => {
+                    setExportMenuOpen(false);
+                    onExportPNG();
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                >
+                  <FileImage className="w-4 h-4 text-indigo-500" />
+                  <span>PNG Image (2x High-Res)</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setExportMenuOpen(false);
+                    onExportSVG();
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                >
+                  <Code className="w-4 h-4 text-emerald-500" />
+                  <span>Vector SVG</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setExportMenuOpen(false);
+                    onExportPDF();
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                >
+                  <FileText className="w-4 h-4 text-rose-500" />
+                  <span>PDF Document</span>
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
-      </div>
+      </motion.div>
     </>
   );
 };

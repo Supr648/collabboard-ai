@@ -1,4 +1,5 @@
 import React, { useRef } from 'react';
+import { motion } from 'framer-motion';
 import {
   MousePointer,
   Pencil,
@@ -62,28 +63,38 @@ const Toolbar = ({ activeTool, onSelectTool, onImportImage, isReadOnly = false }
   }
 
   return (
-    <div className="fixed top-20 left-1/2 -translate-x-1/2 z-40 animate-in fade-in slide-in-from-top-4 duration-200">
+    <motion.div
+      initial={{ y: -20, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+      className="fixed top-20 left-1/2 -translate-x-1/2 z-40"
+    >
       <div className="glass-panel p-1.5 rounded-2xl shadow-2xl flex items-center gap-1 border border-slate-200/90 dark:border-slate-700/90 overflow-x-auto max-w-[95vw]">
         {TOOLS.map((tool) => {
           const Icon = tool.icon;
           const isActive = activeTool === tool.id;
 
           return (
-            <button
+            <motion.button
               key={tool.id}
+              whileHover={{ scale: 1.08 }}
+              whileTap={{ scale: 0.94 }}
               onClick={() => onSelectTool(tool.id)}
               title={`${tool.label} (${tool.shortcut})`}
-              className={`relative p-2.5 rounded-xl flex items-center justify-center transition-all ${
+              className={`relative p-2.5 rounded-xl flex items-center justify-center transition-colors ${
                 isActive
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30 scale-105'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30'
                   : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <Icon className="w-4 h-4" />
               {isActive && (
-                <span className="absolute -bottom-1 w-1.5 h-1.5 rounded-full bg-white" />
+                <motion.span
+                  layoutId="activeToolIndicator"
+                  className="absolute -bottom-1 w-1.5 h-1.5 rounded-full bg-white"
+                />
               )}
-            </button>
+            </motion.button>
           );
         })}
 
@@ -96,15 +107,17 @@ const Toolbar = ({ activeTool, onSelectTool, onImportImage, isReadOnly = false }
           onChange={handleImageFileChange}
           className="hidden"
         />
-        <button
+        <motion.button
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.94 }}
           onClick={() => fileInputRef.current?.click()}
           title="Import Image (PNG, JPG, SVG)"
           className="p-2.5 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-colors"
         >
           <ImageIcon className="w-4 h-4" />
-        </button>
+        </motion.button>
       </div>
-    </div>
+    </motion.div>
   );
 };
 
