@@ -23,6 +23,7 @@ import Modal from '../components/common/Modal';
 import Toast from '../components/common/Toast';
 import CommandPalette from '../components/common/CommandPalette';
 import ShortcutsModal from '../components/common/ShortcutsModal';
+import LoadingScreen from '../components/common/LoadingScreen';
 import {
   exportBoardAsPNG,
   exportBoardAsSVG,
@@ -797,16 +798,7 @@ const WhiteboardPage = () => {
   }, [handleUndo, handleRedo, handleDuplicateSelected, selectedElements, clipboard, isReadOnly]);
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">
-            Loading CollabBoard AI Workspace...
-          </p>
-        </div>
-      </div>
-    );
+    return <LoadingScreen message="Connecting to real-time whiteboard canvas..." />;
   }
 
   const isOwner = !board?.owner || board?.owner === user?.id || board?.owner?._id === user?.id;

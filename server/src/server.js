@@ -4,7 +4,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
-import { connectDB } from './config/db.js';
+import { connectDB, getIsMongoConnected } from './config/db.js';
 import authRoutes from './routes/authRoutes.js';
 import whiteboardRoutes from './routes/whiteboardRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
@@ -17,6 +17,27 @@ dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
+
+// Security Headers Middleware
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
+// Structured Request Logger Middleware
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    if (res.statusCode >= 400 || process.env.NODE_ENV === 'production' || process.env.DEBUG_LOGS === 'true') {
+      console.log(`[HTTP] ${new Date().toISOString()} ${req.method} ${req.originalUrl || req.url} ${res.statusCode} ${duration}ms - ${req.ip || req.socket.remoteAddress}`);
+    }
+  });
+  next();
+});
 
 // CORS configuration
 const allowedOrigins = process.env.CLIENT_URL
@@ -36,7 +57,7 @@ app.use(
 app.use(express.json({ limit: '35mb' }));
 app.use(express.urlencoded({ extended: true, limit: '35mb' }));
 
-// Rate limiting for API security
+// Rate limiting for general API security
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 1000, // Limit each IP to 1000 requests per 15 minutes
@@ -45,7 +66,18 @@ const apiLimiter = rateLimit({
   message: { success: false, message: 'Too many requests, please try again later.' },
 });
 
+// Dedicated strict rate limiting for authentication endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 login/register requests per 15 minutes
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many authentication attempts, please try again in 15 minutes.' },
+});
+
 app.use('/api', apiLimiter);
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
 
 // Attach Socket.IO
 const io = new SocketIOServer(server, {
@@ -62,7 +94,7 @@ const io = new SocketIOServer(server, {
 // Setup Real-Time Socket Handlers
 setupSocketHandlers(io);
 
-// Root and Health check endpoints
+// Root information endpoint
 app.get('/', (req, res) => {
   res.json({
     success: true,
@@ -73,13 +105,44 @@ app.get('/', (req, res) => {
   });
 });
 
+// Production Health & Diagnostics Check Endpoint
 app.get('/api/health', (req, res) => {
+  const memory = process.memoryUsage();
+  const uptimeSeconds = Math.floor(process.uptime());
+  const hours = Math.floor(uptimeSeconds / 3600);
+  const minutes = Math.floor((uptimeSeconds % 3600) / 60);
+  const seconds = uptimeSeconds % 60;
+
   res.json({
     success: true,
-    status: 'ok',
+    status: 'healthy',
     timestamp: new Date().toISOString(),
-    service: 'CollabBoard AI API',
-    uptime: process.uptime(),
+    service: 'CollabBoard AI Production API',
+    version: '2.0.0',
+    environment: process.env.NODE_ENV || 'development',
+    uptime: {
+      seconds: uptimeSeconds,
+      formatted: `${hours}h ${minutes}m ${seconds}s`,
+    },
+    database: {
+      connected: getIsMongoConnected(),
+      mode: getIsMongoConnected() ? 'MongoDB Atlas Cluster' : 'Resilient In-Memory/JSON Storage',
+      status: 'operational',
+    },
+    realtime: {
+      engine: 'Socket.IO v4',
+      activeSockets: io.engine ? io.engine.clientsCount : 0,
+      status: 'listening',
+    },
+    system: {
+      nodeVersion: process.version,
+      platform: process.platform,
+      memory: {
+        heapUsedMB: Math.round((memory.heapUsed / 1024 / 1024) * 100) / 100,
+        heapTotalMB: Math.round((memory.heapTotal / 1024 / 1024) * 100) / 100,
+        rssMB: Math.round((memory.rss / 1024 / 1024) * 100) / 100,
+      },
+    },
   });
 });
 
