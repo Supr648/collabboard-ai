@@ -3,9 +3,11 @@ import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import rateLimit from 'express-rate-limit';
 import { connectDB } from './config/db.js';
 import authRoutes from './routes/authRoutes.js';
 import whiteboardRoutes from './routes/whiteboardRoutes.js';
+import aiRoutes from './routes/aiRoutes.js';
 import { setupSocketHandlers } from './sockets/socketHandler.js';
 import { notFound, errorHandler } from './middleware/errorHandler.js';
 
@@ -30,8 +32,19 @@ app.use(
 );
 
 // Body parsers with generous limits for canvas snapshots
-app.use(express.json({ limit: '25mb' }));
-app.use(express.urlencoded({ extended: true, limit: '25mb' }));
+app.use(express.json({ limit: '35mb' }));
+app.use(express.urlencoded({ extended: true, limit: '35mb' }));
+
+// Rate limiting for API security
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 1000, // Limit each IP to 1000 requests per 15 minutes
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many requests, please try again later.' },
+});
+
+app.use('/api', apiLimiter);
 
 // Attach Socket.IO
 const io = new SocketIOServer(server, {
@@ -48,12 +61,23 @@ const io = new SocketIOServer(server, {
 // Setup Real-Time Socket Handlers
 setupSocketHandlers(io);
 
-// Health check endpoint
+// Root and Health check endpoints
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    service: 'CollabBoard AI Intelligent Real-Time Collaborative Workspace API',
+    status: 'healthy',
+    version: '2.0.0',
+    documentation: '/api/health',
+  });
+});
+
 app.get('/api/health', (req, res) => {
   res.json({
+    success: true,
     status: 'ok',
     timestamp: new Date().toISOString(),
-    service: 'Collaborative Whiteboard API',
+    service: 'CollabBoard AI API',
     uptime: process.uptime(),
   });
 });
@@ -61,6 +85,7 @@ app.get('/api/health', (req, res) => {
 // Mount Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/whiteboards', whiteboardRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Error Handling Middlewares
 app.use(notFound);
@@ -73,7 +98,7 @@ const startServer = async () => {
   await connectDB();
 
   server.listen(PORT, () => {
-    console.log(`🚀 Collaborative Whiteboard Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+    console.log(`🚀 CollabBoard AI Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
     console.log(`📡 Socket.IO server ready for real-time collaboration`);
   });
 };

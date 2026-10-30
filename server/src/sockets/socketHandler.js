@@ -7,10 +7,8 @@ const roomParticipants = new Map();
 
 export const setupSocketHandlers = (io) => {
   io.on('connection', (socket) => {
-    // console.log(`🔌 New client connected: ${socket.id}`);
-
-    // Join room
-    socket.on('join-room', async ({ roomId, user }) => {
+    // Join room with user profile and role
+    socket.on('join-room', async ({ roomId, user, role = 'editor' }) => {
       if (!roomId) return;
 
       socket.join(roomId);
@@ -20,6 +18,7 @@ export const setupSocketHandlers = (io) => {
         id: user?.id || user?._id || `guest_${socket.id.substring(0, 6)}`,
         name: user?.name || `Guest ${socket.id.substring(0, 4)}`,
         avatarColor: user?.avatarColor || '#6366f1',
+        role: role || 'editor',
         joinedAt: new Date().toISOString(),
       };
 
@@ -35,7 +34,7 @@ export const setupSocketHandlers = (io) => {
 
       const participantsList = Array.from(currentRoom.values());
 
-      // Notify others in the room
+      // Notify others in room
       socket.to(roomId).emit('user-joined', {
         user: participant,
         participants: participantsList,
@@ -80,7 +79,7 @@ export const setupSocketHandlers = (io) => {
       socket.to(roomId).emit('remote-element-add', element);
     });
 
-    // Element modified (moved, edited)
+    // Element modified (moved, edited, resized)
     socket.on('element-update', ({ roomId, element }) => {
       if (!roomId || !element) return;
       socket.to(roomId).emit('remote-element-update', element);
@@ -107,6 +106,38 @@ export const setupSocketHandlers = (io) => {
         elements,
         action,
         by: socket.data.participant?.name,
+      });
+    });
+
+    // Live Reactions / Floating Emojis
+    socket.on('reaction-trigger', ({ roomId, emoji, x, y }) => {
+      if (!roomId || !emoji) return;
+      socket.to(roomId).emit('reaction-receive', {
+        id: `react_${Date.now()}_${Math.random()}`,
+        emoji,
+        x: x || Math.random() * 500 + 100,
+        y: y || 400,
+        from: socket.data.participant?.name || 'Collaborator',
+      });
+    });
+
+    // Comments synchronization
+    socket.on('comment-add', ({ roomId, comment }) => {
+      if (!roomId || !comment) return;
+      socket.to(roomId).emit('comment-sync', { comment });
+    });
+
+    socket.on('comment-resolve', ({ roomId, commentId }) => {
+      if (!roomId || !commentId) return;
+      socket.to(roomId).emit('comment-resolved', { commentId });
+    });
+
+    // Typing indicators
+    socket.on('typing-status', ({ roomId, isTyping }) => {
+      if (!roomId || !socket.data.participant) return;
+      socket.to(roomId).emit('user-typing', {
+        user: socket.data.participant,
+        isTyping,
       });
     });
 

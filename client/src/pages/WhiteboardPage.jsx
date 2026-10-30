@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { getWhiteboardByRoomId, saveWhiteboardState, updateWhiteboard } from '../api/whiteboard';
@@ -10,42 +10,75 @@ import PropertiesBar from '../components/whiteboard/PropertiesBar';
 import ActionControls from '../components/whiteboard/ActionControls';
 import CollaboratorsBar from '../components/whiteboard/CollaboratorsBar';
 import RemoteCursors from '../components/whiteboard/RemoteCursors';
+import Minimap from '../components/whiteboard/Minimap';
+import LiveReactions from '../components/whiteboard/LiveReactions';
+import CommentsOverlay from '../components/whiteboard/CommentsOverlay';
+import AiAssistantModal from '../components/whiteboard/AiAssistantModal';
+import TemplatesModal from '../components/dashboard/TemplatesModal';
+import VersionHistoryModal from '../components/whiteboard/VersionHistoryModal';
 import ShareModal from '../components/whiteboard/ShareModal';
 import Modal from '../components/common/Modal';
 import Toast from '../components/common/Toast';
-import { exportBoardAsPNG, generateThumbnail } from '../utils/canvasUtils';
+import {
+  exportBoardAsPNG,
+  exportBoardAsSVG,
+  exportBoardAsPDF,
+  generateThumbnail,
+  getElementBoundingBox,
+} from '../utils/canvasUtils';
 import confetti from 'canvas-confetti';
 
 const WhiteboardPage = () => {
   const { roomId } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { isDark } = useTheme();
+
+  // Role from query param: ?role=viewer or default to editor
+  const userRole = searchParams.get('role') === 'viewer' ? 'viewer' : 'editor';
+  const isReadOnly = userRole === 'viewer';
 
   // Whiteboard metadata
   const [board, setBoard] = useState(null);
   const [title, setTitle] = useState('Untitled Whiteboard');
   const [loading, setLoading] = useState(true);
-  const [saveStatus, setSaveStatus] = useState('saved'); // 'saved' | 'saving' | 'unsaved'
+  const [saveStatus, setSaveStatus] = useState('saved');
 
   // Canvas drawing state
   const [elements, setElements] = useState([]);
-  const [activeTool, setActiveTool] = useState('pen');
+  const [selectedElements, setSelectedElements] = useState([]);
+  const [clipboard, setClipboard] = useState([]);
+  const [activeTool, setActiveTool] = useState('select');
   const [strokeColor, setStrokeColor] = useState('#6366f1');
   const [strokeWidth, setStrokeWidth] = useState(4);
   const [fillColor, setFillColor] = useState('transparent');
+  const [opacity, setOpacity] = useState(1);
+  const [textConfig, setTextConfig] = useState({
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    bold: false,
+    italic: false,
+    underline: false,
+    align: 'left',
+  });
 
   // Zoom & Pan state
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [snapToGrid, setSnapToGrid] = useState(false);
+  const [isPresentation, setIsPresentation] = useState(false);
 
-  // Undo / Redo History Stack
+  // Undo / Redo History Stack & Version Checkpoints
   const [history, setHistory] = useState([[]]);
   const [historyStep, setHistoryStep] = useState(0);
+  const [versionCheckpoints, setVersionCheckpoints] = useState([]);
 
-  // Modals & Toasts
+  // Modals
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [clearModalOpen, setClearModalOpen] = useState(false);
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [templatesModalOpen, setTemplatesModalOpen] = useState(false);
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const [toast, setToast] = useState({ message: '', type: 'info' });
 
   const autoSaveTimerRef = useRef(null);
@@ -59,6 +92,12 @@ const WhiteboardPage = () => {
 
   const handleRemoteAdd = useCallback((newElement) => {
     setElements((prev) => [...prev, newElement]);
+  }, []);
+
+  const handleRemoteUpdate = useCallback((updatedElement) => {
+    setElements((prev) =>
+      prev.map((el) => (el.id === updatedElement.id ? updatedElement : el))
+    );
   }, []);
 
   const handleRemoteDelete = useCallback((elementId) => {
@@ -75,40 +114,65 @@ const WhiteboardPage = () => {
     participants,
     cursors,
     remoteLiveStroke,
-    connectionStatus,
+    incomingReactions,
+    comments,
+    typingUsers,
     emitCursorMove,
     emitElementAdd,
+    emitElementUpdate,
     emitElementDelete,
     emitCanvasClear,
     emitCanvasSync,
+    emitReaction,
+    emitCommentAdd,
+    emitCommentResolve,
+    emitTyping,
   } = useCollaboration({
     roomId,
     user,
+    role: userRole,
     onRemoteSync: handleRemoteSync,
     onRemoteAdd: handleRemoteAdd,
+    onRemoteUpdate: handleRemoteUpdate,
     onRemoteDelete: handleRemoteDelete,
     onRemoteClear: handleRemoteClear,
   });
 
-  // Fetch initial whiteboard data from API
+  // Fetch initial whiteboard data from API or SessionStorage
   useEffect(() => {
     const fetchBoard = async () => {
       try {
         setLoading(true);
+
+        // Check if there are template initial elements passed from Dashboard
+        const sessionElementsRaw = sessionStorage.getItem(`init_elements_${roomId}`);
+        let initialElements = [];
+        if (sessionElementsRaw) {
+          try {
+            initialElements = JSON.parse(sessionElementsRaw);
+            sessionStorage.removeItem(`init_elements_${roomId}`);
+          } catch (e) {}
+        }
+
         const res = await getWhiteboardByRoomId(roomId);
         if (res.success && res.whiteboard) {
           const wb = res.whiteboard;
           setBoard(wb);
           setTitle(wb.title || 'Untitled Whiteboard');
-          const initialElements = wb.elements || [];
-          setElements(initialElements);
-          setHistory([initialElements]);
+          const loadedElements = initialElements.length > 0 ? initialElements : wb.elements || [];
+          setElements(loadedElements);
+          setHistory([loadedElements]);
           setHistoryStep(0);
+          setVersionCheckpoints([
+            { id: 'v_init', title: 'Initial Load', elements: loadedElements, timestamp: new Date().toISOString() },
+          ]);
+
+          if (initialElements.length > 0) {
+            triggerAutoSave(loadedElements);
+          }
         }
       } catch (err) {
-        console.warn('Whiteboard not in database yet; creating dynamic session room:', err.message);
-        // Allow dynamic rooms even if unpersisted initially
-        setBoard({ roomId, title: 'Collaborative Session', owner: user?.id });
+        setBoard({ roomId, title: 'Collaborative Workspace', owner: user?.id });
       } finally {
         setLoading(false);
       }
@@ -120,6 +184,7 @@ const WhiteboardPage = () => {
   // Debounced Auto-Save to backend
   const triggerAutoSave = useCallback(
     (currentElements) => {
+      if (isReadOnly) return;
       setSaveStatus('saving');
       if (autoSaveTimerRef.current) {
         clearTimeout(autoSaveTimerRef.current);
@@ -130,60 +195,96 @@ const WhiteboardPage = () => {
           const thumbnail = generateThumbnail(currentElements, isDark);
           await saveWhiteboardState(roomId, currentElements, thumbnail);
           setSaveStatus('saved');
+
+          // Record auto-save snapshot checkpoint every few saves
+          setVersionCheckpoints((prev) => [
+            {
+              id: `v_${Date.now()}`,
+              title: `Auto-save checkpoint (${currentElements.length} items)`,
+              elements: [...currentElements],
+              timestamp: new Date().toISOString(),
+            },
+            ...prev.slice(0, 15),
+          ]);
         } catch (err) {
-          // If public room or unauthenticated guest, ignore save error
           setSaveStatus('saved');
         }
       }, 1500);
     },
-    [roomId, isDark]
+    [roomId, isDark, isReadOnly]
   );
 
   // Add a newly drawn element
   const handleAddElement = useCallback(
     (element) => {
+      if (isReadOnly) return;
       setElements((prev) => {
         const next = [...prev, element];
-
-        // Record history snapshot for undo/redo
-        setHistory((prevHist) => {
-          const nextHist = prevHist.slice(0, historyStep + 1);
-          return [...nextHist, next];
-        });
+        setHistory((prevHist) => [...prevHist.slice(0, historyStep + 1), next]);
         setHistoryStep((prevStep) => prevStep + 1);
 
-        // Emit through Socket.IO to collaborators
         emitElementAdd(element);
-
-        // Trigger Auto-Save
         triggerAutoSave(next);
-
         return next;
       });
     },
-    [historyStep, emitElementAdd, triggerAutoSave]
+    [historyStep, emitElementAdd, triggerAutoSave, isReadOnly]
   );
 
-  // Delete an element (eraser)
+  // Update an existing element (moved, resized, text edited)
+  const handleUpdateElement = useCallback(
+    (element) => {
+      if (isReadOnly) return;
+      setElements((prev) => {
+        const next = prev.map((el) => (el.id === element.id ? element : el));
+        emitElementUpdate(element);
+        triggerAutoSave(next);
+        return next;
+      });
+    },
+    [emitElementUpdate, triggerAutoSave, isReadOnly]
+  );
+
+  // Insert multiple elements (from AI or Templates)
+  const handleInsertElements = useCallback(
+    (newElements) => {
+      if (isReadOnly || !Array.isArray(newElements)) return;
+      setElements((prev) => {
+        const next = [...prev, ...newElements];
+        setHistory((prevHist) => [...prevHist.slice(0, historyStep + 1), next]);
+        setHistoryStep((prevStep) => prevStep + 1);
+
+        emitCanvasSync(next, 'ai_insert');
+        triggerAutoSave(next);
+        return next;
+      });
+
+      confetti({ particleCount: 40, spread: 50, origin: { y: 0.8 } });
+      setToast({ message: `Added ${newElements.length} elements to canvas!`, type: 'success' });
+    },
+    [historyStep, emitCanvasSync, triggerAutoSave, isReadOnly]
+  );
+
+  // Delete an element
   const handleDeleteElement = useCallback(
     (elementId) => {
+      if (isReadOnly) return;
       setElements((prev) => {
         const next = prev.filter((el) => el.id !== elementId);
-
         setHistory((prevHist) => [...prevHist.slice(0, historyStep + 1), next]);
         setHistoryStep((prevStep) => prevStep + 1);
 
         emitElementDelete(elementId);
         triggerAutoSave(next);
-
         return next;
       });
     },
-    [historyStep, emitElementDelete, triggerAutoSave]
+    [historyStep, emitElementDelete, triggerAutoSave, isReadOnly]
   );
 
   // Undo
   const handleUndo = useCallback(() => {
+    if (isReadOnly) return;
     if (historyStep > 0) {
       const prevStep = historyStep - 1;
       const targetState = history[prevStep] || [];
@@ -192,10 +293,11 @@ const WhiteboardPage = () => {
       emitCanvasSync(targetState, 'undo');
       triggerAutoSave(targetState);
     }
-  }, [history, historyStep, emitCanvasSync, triggerAutoSave]);
+  }, [history, historyStep, emitCanvasSync, triggerAutoSave, isReadOnly]);
 
   // Redo
   const handleRedo = useCallback(() => {
+    if (isReadOnly) return;
     if (historyStep < history.length - 1) {
       const nextStep = historyStep + 1;
       const targetState = history[nextStep] || [];
@@ -204,18 +306,114 @@ const WhiteboardPage = () => {
       emitCanvasSync(targetState, 'redo');
       triggerAutoSave(targetState);
     }
-  }, [history, historyStep, emitCanvasSync, triggerAutoSave]);
+  }, [history, historyStep, emitCanvasSync, triggerAutoSave, isReadOnly]);
+
+  // Fit to content screen
+  const handleFitToScreen = () => {
+    if (elements.length === 0) {
+      setZoom(1);
+      setPan({ x: 0, y: 0 });
+      return;
+    }
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    elements.forEach((el) => {
+      const b = getElementBoundingBox(el);
+      if (b) {
+        minX = Math.min(minX, b.minX);
+        minY = Math.min(minY, b.minY);
+        maxX = Math.max(maxX, b.maxX);
+        maxY = Math.max(maxY, b.maxY);
+      }
+    });
+
+    const padding = 100;
+    const contentW = maxX - minX + padding * 2;
+    const contentH = maxY - minY + padding * 2;
+
+    const scale = Math.min(window.innerWidth / contentW, window.innerHeight / contentH, 1.5);
+    const newZoom = Math.max(0.2, Math.min(2.5, scale));
+
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+
+    setZoom(newZoom);
+    setPan({
+      x: window.innerWidth / 2 - centerX * newZoom,
+      y: window.innerHeight / 2 - centerY * newZoom,
+    });
+  };
+
+  // Duplicate selected elements
+  const handleDuplicateSelected = useCallback(() => {
+    if (selectedElements.length === 0 || isReadOnly) return;
+
+    const offset = 30;
+    const duplicated = selectedElements.map((el) => {
+      const copy = JSON.parse(JSON.stringify(el));
+      copy.id = `el_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+      if (copy.points) {
+        copy.points = copy.points.map((p) => ({ x: p.x + offset, y: p.y + offset }));
+      } else if (copy.x1 !== undefined) {
+        copy.x1 += offset;
+        copy.y1 += offset;
+        copy.x2 += offset;
+        copy.y2 += offset;
+      } else if (copy.x !== undefined) {
+        copy.x += offset;
+        copy.y += offset;
+      }
+      return copy;
+    });
+
+    setElements((prev) => {
+      const next = [...prev, ...duplicated];
+      setHistory((prevHist) => [...prevHist.slice(0, historyStep + 1), next]);
+      setHistoryStep((prevStep) => prevStep + 1);
+      duplicated.forEach((d) => emitElementAdd(d));
+      triggerAutoSave(next);
+      return next;
+    });
+
+    setSelectedElements(duplicated);
+  }, [selectedElements, historyStep, emitElementAdd, triggerAutoSave, isReadOnly]);
+
+  // Import Image
+  const handleImportImage = (base64Data) => {
+    if (isReadOnly) return;
+    const img = new Image();
+    img.onload = () => {
+      const w = Math.min(400, img.width);
+      const h = (img.height / img.width) * w;
+      const newEl = {
+        id: `el_img_${Date.now()}`,
+        type: 'image',
+        src: base64Data,
+        x1: -pan.x / zoom + window.innerWidth / (2 * zoom) - w / 2,
+        y1: -pan.y / zoom + window.innerHeight / (2 * zoom) - h / 2,
+        x2: -pan.x / zoom + window.innerWidth / (2 * zoom) + w / 2,
+        y2: -pan.y / zoom + window.innerHeight / (2 * zoom) + h / 2,
+        strokeColor: '#cbd5e1',
+        strokeWidth: 1,
+      };
+      handleAddElement(newEl);
+      setSelectedElements([newEl]);
+    };
+    img.src = base64Data;
+  };
 
   // Clear canvas
   const handleClearCanvas = useCallback(() => {
+    if (isReadOnly) return;
     setElements([]);
+    setSelectedElements([]);
     setHistory((prev) => [...prev.slice(0, historyStep + 1), []]);
     setHistoryStep((prev) => prev + 1);
     emitCanvasClear();
     triggerAutoSave([]);
     setClearModalOpen(false);
     setToast({ message: 'Canvas cleared', type: 'info' });
-  }, [historyStep, emitCanvasClear, triggerAutoSave]);
+  }, [historyStep, emitCanvasClear, triggerAutoSave, isReadOnly]);
 
   // Rename title
   const handleRenameTitle = async (newTitle) => {
@@ -224,73 +422,114 @@ const WhiteboardPage = () => {
       try {
         await updateWhiteboard(board._id || board.id, { title: newTitle });
         setToast({ message: 'Title saved', type: 'success' });
-      } catch (err) {
-        // Non-fatal
-      }
+      } catch (err) {}
     }
   };
 
-  // Export PNG
+  // Restore version checkpoint
+  const handleRestoreVersion = (versionElements) => {
+    setElements(versionElements);
+    setSelectedElements([]);
+    setHistory((prev) => [...prev.slice(0, historyStep + 1), versionElements]);
+    setHistoryStep((prev) => prev + 1);
+    emitCanvasSync(versionElements, 'restore_checkpoint');
+    triggerAutoSave(versionElements);
+    setToast({ message: 'Restored board version checkpoint', type: 'success' });
+  };
+
+  // Exports
   const handleExportPNG = () => {
     exportBoardAsPNG(elements, title, isDark);
-    confetti({
-      particleCount: 50,
-      spread: 60,
-      origin: { y: 0.9 },
-    });
+    confetti({ particleCount: 50, spread: 60, origin: { y: 0.9 } });
+  };
+
+  const handleExportSVG = () => {
+    exportBoardAsSVG(elements, title, isDark);
+  };
+
+  const handleExportPDF = () => {
+    exportBoardAsPDF(elements, title, isDark);
   };
 
   // Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Ignore if user is typing in text area or input
       if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
 
+      // Undo / Redo
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
-        if (e.shiftKey) {
-          handleRedo();
-        } else {
-          handleUndo();
-        }
+        if (e.shiftKey) handleRedo();
+        else handleUndo();
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
         e.preventDefault();
         handleRedo();
-      } else {
+      }
+      // Duplicate
+      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        handleDuplicateSelected();
+      }
+      // Copy & Paste
+      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+        if (selectedElements.length > 0) {
+          setClipboard(JSON.parse(JSON.stringify(selectedElements)));
+          setToast({ message: `Copied ${selectedElements.length} element(s)`, type: 'info' });
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+        if (clipboard.length > 0 && !isReadOnly) {
+          const offset = 25;
+          const pasted = clipboard.map((c) => {
+            const el = { ...c, id: `el_${Date.now()}_${Math.random().toString(36).substr(2, 6)}` };
+            if (el.points) el.points = el.points.map((p) => ({ x: p.x + offset, y: p.y + offset }));
+            else if (el.x1 !== undefined) {
+              el.x1 += offset;
+              el.y1 += offset;
+              el.x2 += offset;
+              el.y2 += offset;
+            } else if (el.x !== undefined) {
+              el.x += offset;
+              el.y += offset;
+            }
+            return el;
+          });
+          pasted.forEach((p) => handleAddElement(p));
+          setSelectedElements(pasted);
+        }
+      }
+      // Delete Selected
+      else if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedElements.length > 0 && !isReadOnly) {
+          selectedElements.forEach((sel) => handleDeleteElement(sel.id));
+          setSelectedElements([]);
+        }
+      }
+      // Tool Hotkeys
+      else {
         switch (e.key.toLowerCase()) {
-          case 'v':
-            setActiveTool('select');
+          case 'v': setActiveTool('select'); break;
+          case 'p': setActiveTool('pen'); break;
+          case 'h': setActiveTool('highlighter'); break;
+          case 's': setActiveTool('sticky'); break;
+          case 'r': setActiveTool('rectangle'); break;
+          case 'c': setActiveTool('circle'); break;
+          case 'd': setActiveTool('triangle'); break;
+          case 'l': setActiveTool('line'); break;
+          case 'a': setActiveTool('arrow'); break;
+          case 't': setActiveTool('text'); break;
+          case 'e': setActiveTool('eraser'); break;
+          case 'escape':
+            setSelectedElements([]);
+            setIsPresentation(false);
             break;
-          case 'p':
-            setActiveTool('pen');
-            break;
-          case 'e':
-            setActiveTool('eraser');
-            break;
-          case 'l':
-            setActiveTool('line');
-            break;
-          case 'a':
-            setActiveTool('arrow');
-            break;
-          case 'r':
-            setActiveTool('rectangle');
-            break;
-          case 'c':
-            setActiveTool('circle');
-            break;
-          case 't':
-            setActiveTool('text');
-            break;
-          default:
-            break;
+          default: break;
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleUndo, handleRedo]);
+  }, [handleUndo, handleRedo, handleDuplicateSelected, selectedElements, clipboard, isReadOnly]);
 
   if (loading) {
     return (
@@ -298,7 +537,7 @@ const WhiteboardPage = () => {
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
           <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">
-            Joining room #{roomId}...
+            Loading CollabBoard AI Workspace...
           </p>
         </div>
       </div>
@@ -309,69 +548,163 @@ const WhiteboardPage = () => {
 
   return (
     <div className="relative w-screen h-screen overflow-hidden select-none bg-slate-50 dark:bg-slate-950">
-      {/* Top Bar: Title, Save Status, Collaborator Avatars, Share Button */}
+      {/* Top Header Bar */}
       <CollaboratorsBar
         title={title}
         onRenameTitle={handleRenameTitle}
         participants={participants}
         saveStatus={saveStatus}
         onOpenShare={() => setShareModalOpen(true)}
+        onOpenAi={() => setAiModalOpen(true)}
+        onOpenTemplates={() => setTemplatesModalOpen(true)}
+        onOpenHistory={() => setHistoryModalOpen(true)}
         isOwner={isOwner}
+        userRole={userRole}
+        isPresentation={isPresentation}
       />
 
-      {/* Floating Drawing Tool Selection Bar */}
-      <Toolbar activeTool={activeTool} onSelectTool={setActiveTool} />
+      {/* Floating Drawing Toolbar */}
+      {!isPresentation && (
+        <Toolbar
+          activeTool={activeTool}
+          onSelectTool={setActiveTool}
+          onImportImage={handleImportImage}
+          isReadOnly={isReadOnly}
+        />
+      )}
 
-      {/* Floating Properties Palette (Colors, Stroke Width, Fill) */}
-      <PropertiesBar
-        strokeColor={strokeColor}
-        onChangeStrokeColor={setStrokeColor}
-        strokeWidth={strokeWidth}
-        onChangeStrokeWidth={setStrokeWidth}
-        fillColor={fillColor}
-        onChangeFillColor={setFillColor}
-        activeTool={activeTool}
-      />
+      {/* Properties Palette */}
+      {!isPresentation && !isReadOnly && (
+        <PropertiesBar
+          strokeColor={strokeColor}
+          onChangeStrokeColor={setStrokeColor}
+          strokeWidth={strokeWidth}
+          onChangeStrokeWidth={setStrokeWidth}
+          fillColor={fillColor}
+          onChangeFillColor={setFillColor}
+          opacity={opacity}
+          onChangeOpacity={setOpacity}
+          activeTool={activeTool}
+          textConfig={textConfig}
+          onChangeTextConfig={(newCfg) => setTextConfig((prev) => ({ ...prev, ...newCfg }))}
+          selectedElement={selectedElements[0]}
+        />
+      )}
 
-      {/* Remote Live Collaborators Cursor Overlay */}
+      {/* Remote Collaborators Cursors */}
       <RemoteCursors cursors={cursors} zoom={zoom} pan={pan} />
 
-      {/* Interactive Canvas Surface */}
+      {/* Canvas Layer */}
       <Canvas
         elements={elements}
         onAddElement={handleAddElement}
+        onUpdateElement={handleUpdateElement}
         onDeleteElement={handleDeleteElement}
         remoteLiveStroke={remoteLiveStroke}
         activeTool={activeTool}
         strokeColor={strokeColor}
         strokeWidth={strokeWidth}
         fillColor={fillColor}
+        opacity={opacity}
+        textConfig={textConfig}
         zoom={zoom}
         setZoom={setZoom}
         pan={pan}
         setPan={setPan}
+        snapToGrid={snapToGrid}
+        selectedElements={selectedElements}
+        setSelectedElements={setSelectedElements}
         onCursorMove={emitCursorMove}
         isDark={isDark}
+        isReadOnly={isReadOnly}
       />
 
-      {/* Action Controls (Undo, Redo, Zoom In/Out, Clear Canvas, Export PNG) */}
-      <ActionControls
-        canUndo={historyStep > 0}
-        canRedo={historyStep < history.length - 1}
-        onUndo={handleUndo}
-        onRedo={handleRedo}
+      {/* Pinned Comments on Canvas */}
+      <CommentsOverlay
+        comments={comments}
+        onAddComment={emitCommentAdd}
+        onResolveComment={emitCommentResolve}
         zoom={zoom}
-        onZoomIn={() => setZoom((z) => Math.min(3, z * 1.2))}
-        onZoomOut={() => setZoom((z) => Math.max(0.2, z / 1.2))}
-        onResetZoom={() => {
-          setZoom(1);
-          setPan({ x: 0, y: 0 });
-        }}
-        onClearCanvas={() => setClearModalOpen(true)}
-        onExportPNG={handleExportPNG}
+        pan={pan}
+        currentUser={user}
       />
 
-      {/* Share Invitation Modal */}
+      {/* Live Floating Emoji Reactions */}
+      <LiveReactions
+        onTriggerReaction={(emoji) => emitReaction(emoji, window.innerWidth / 2, window.innerHeight - 100)}
+        incomingReactions={incomingReactions}
+      />
+
+      {/* Minimap */}
+      {!isPresentation && (
+        <Minimap
+          elements={elements}
+          zoom={zoom}
+          pan={pan}
+          setPan={setPan}
+          isDark={isDark}
+        />
+      )}
+
+      {/* Action Controls & Multi-Format Export */}
+      {!isPresentation && (
+        <ActionControls
+          canUndo={historyStep > 0}
+          canRedo={historyStep < history.length - 1}
+          onUndo={handleUndo}
+          onRedo={handleRedo}
+          zoom={zoom}
+          onZoomIn={() => setZoom((z) => Math.min(3, z * 1.2))}
+          onZoomOut={() => setZoom((z) => Math.max(0.2, z / 1.2))}
+          onResetZoom={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}
+          onFitToScreen={handleFitToScreen}
+          snapToGrid={snapToGrid}
+          onToggleSnapToGrid={() => setSnapToGrid(!snapToGrid)}
+          onTogglePresentation={() => setIsPresentation(true)}
+          onClearCanvas={() => setClearModalOpen(true)}
+          onExportPNG={handleExportPNG}
+          onExportSVG={handleExportSVG}
+          onExportPDF={handleExportPDF}
+        />
+      )}
+
+      {/* Presentation Mode Exit Floating Pill */}
+      {isPresentation && (
+        <div className="fixed top-6 right-6 z-50">
+          <button
+            onClick={() => setIsPresentation(false)}
+            className="glass-panel px-4 py-2 rounded-2xl shadow-2xl border border-purple-500 bg-purple-600/90 text-white text-xs font-bold hover:scale-105 transition-all"
+          >
+            Exit Presentation (Esc)
+          </button>
+        </div>
+      )}
+
+      {/* AI Assistant Modal */}
+      <AiAssistantModal
+        isOpen={aiModalOpen}
+        onClose={() => setAiModalOpen(false)}
+        onInsertElements={handleInsertElements}
+        currentElements={elements}
+        boardTitle={title}
+      />
+
+      {/* Templates Blueprint Modal */}
+      <TemplatesModal
+        isOpen={templatesModalOpen}
+        onClose={() => setTemplatesModalOpen(false)}
+        onSelectTemplate={(tpl) => handleInsertElements(tpl.generateElements())}
+      />
+
+      {/* Version History Modal */}
+      <VersionHistoryModal
+        isOpen={historyModalOpen}
+        onClose={() => setHistoryModalOpen(false)}
+        versions={versionCheckpoints}
+        onRestoreVersion={handleRestoreVersion}
+      />
+
+      {/* Share Modal */}
       <ShareModal
         isOpen={shareModalOpen}
         onClose={() => setShareModalOpen(false)}
@@ -379,7 +712,7 @@ const WhiteboardPage = () => {
         title={title}
       />
 
-      {/* Clear Canvas Confirmation Modal */}
+      {/* Clear Canvas Confirmation */}
       <Modal
         isOpen={clearModalOpen}
         onClose={() => setClearModalOpen(false)}
@@ -406,7 +739,7 @@ const WhiteboardPage = () => {
         </div>
       </Modal>
 
-      {/* Toast Alert Notification */}
+      {/* Toast Notification */}
       {toast.message && (
         <Toast
           message={toast.message}

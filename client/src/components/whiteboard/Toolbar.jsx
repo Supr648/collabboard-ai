@@ -1,30 +1,61 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import {
   MousePointer,
   Pencil,
+  Highlighter,
   Eraser,
-  Minus,
-  MoveRight,
+  StickyNote,
   Square,
   Circle,
+  Triangle,
+  Minus,
+  MoveRight,
   Type,
+  Image as ImageIcon,
 } from 'lucide-react';
 
 const TOOLS = [
-  { id: 'select', label: 'Select / Move', icon: MousePointer, shortcut: 'V' },
+  { id: 'select', label: 'Select & Move', icon: MousePointer, shortcut: 'V' },
   { id: 'pen', label: 'Freehand Pen', icon: Pencil, shortcut: 'P' },
-  { id: 'eraser', label: 'Eraser', icon: Eraser, shortcut: 'E' },
-  { id: 'line', label: 'Line Tool', icon: Minus, shortcut: 'L' },
-  { id: 'arrow', label: 'Arrow Tool', icon: MoveRight, shortcut: 'A' },
-  { id: 'rectangle', label: 'Rectangle Tool', icon: Square, shortcut: 'R' },
-  { id: 'circle', label: 'Circle Tool', icon: Circle, shortcut: 'C' },
-  { id: 'text', label: 'Text Tool', icon: Type, shortcut: 'T' },
+  { id: 'highlighter', label: 'Highlighter', icon: Highlighter, shortcut: 'H' },
+  { id: 'sticky', label: 'Sticky Note', icon: StickyNote, shortcut: 'S' },
+  { id: 'rectangle', label: 'Rectangle', icon: Square, shortcut: 'R' },
+  { id: 'circle', label: 'Circle / Oval', icon: Circle, shortcut: 'C' },
+  { id: 'triangle', label: 'Triangle', icon: Triangle, shortcut: 'D' },
+  { id: 'line', label: 'Line', icon: Minus, shortcut: 'L' },
+  { id: 'arrow', label: 'Arrow', icon: MoveRight, shortcut: 'A' },
+  { id: 'text', label: 'Rich Text', icon: Type, shortcut: 'T' },
+  { id: 'eraser', label: 'Precision Eraser', icon: Eraser, shortcut: 'E' },
 ];
 
-const Toolbar = ({ activeTool, onSelectTool }) => {
+const Toolbar = ({ activeTool, onSelectTool, onImportImage, isReadOnly = false }) => {
+  const fileInputRef = useRef(null);
+
+  const handleImageFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file && onImportImage) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        onImportImage(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+    e.target.value = '';
+  };
+
+  if (isReadOnly) {
+    return (
+      <div className="fixed top-20 left-1/2 -translate-x-1/2 z-40 animate-in fade-in duration-200">
+        <div className="glass-panel px-4 py-2 rounded-2xl shadow-xl border border-amber-500/50 bg-amber-50/80 dark:bg-amber-950/80 text-amber-800 dark:text-amber-200 text-xs font-bold flex items-center gap-2">
+          <span>👀 Read-Only Mode (Viewing Permissions)</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed top-20 left-1/2 -translate-x-1/2 z-40 animate-in fade-in slide-in-from-top-4 duration-200">
-      <div className="glass-panel p-1.5 rounded-2xl shadow-2xl flex items-center gap-1 border border-slate-200/90 dark:border-slate-700/90">
+      <div className="glass-panel p-1.5 rounded-2xl shadow-2xl flex items-center gap-1 border border-slate-200/90 dark:border-slate-700/90 overflow-x-auto max-w-[95vw]">
         {TOOLS.map((tool) => {
           const Icon = tool.icon;
           const isActive = activeTool === tool.id;
@@ -47,6 +78,23 @@ const Toolbar = ({ activeTool, onSelectTool }) => {
             </button>
           );
         })}
+
+        {/* Image Import button */}
+        <div className="h-5 w-[1px] bg-slate-200 dark:bg-slate-700 mx-1" />
+        <input
+          type="file"
+          ref={fileInputRef}
+          accept="image/*"
+          onChange={handleImageFileChange}
+          className="hidden"
+        />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          title="Import Image (PNG, JPG, SVG)"
+          className="p-2.5 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-colors"
+        >
+          <ImageIcon className="w-4 h-4" />
+        </button>
       </div>
     </div>
   );

@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { formatRelativeTime, formatDate } from '../../utils/formatters';
 
-const BoardCard = ({ board, onRename, onDelete, onShare }) => {
+const BoardCard = ({ board, onRename, onDelete, onShare, onDuplicate }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -106,6 +106,18 @@ const BoardCard = ({ board, onRename, onDelete, onShare }) => {
                   <Edit2 className="w-3.5 h-3.5 text-amber-500" />
                   Rename
                 </button>
+                {onDuplicate && (
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onDuplicate(board);
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-purple-500" />
+                    Duplicate Board
+                  </button>
+                )}
                 <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
                 <button
                   onClick={() => {

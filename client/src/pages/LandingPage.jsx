@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { createWhiteboard } from '../api/whiteboard';
 import Navbar from '../components/common/Navbar';
 import {
   Sparkles,
@@ -15,14 +14,18 @@ import {
   Pencil,
   RotateCcw,
   CheckCircle2,
+  BrainCircuit,
+  GitFork,
+  MessageSquare,
+  FileText,
+  Lock,
 } from 'lucide-react';
 
 const LandingPage = () => {
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
 
-  // Interactive Mini Canvas in Hero
+  // Interactive Mini Sandbox Canvas in Hero
   const miniCanvasRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [miniColor, setMiniColor] = useState('#6366f1');
@@ -40,22 +43,11 @@ const LandingPage = () => {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    // Welcome sketch
-    ctx.beginPath();
-    ctx.arc(canvas.width / 2, canvas.height / 2 - 20, 45, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Smile
-    ctx.beginPath();
-    ctx.arc(canvas.width / 2, canvas.height / 2 - 15, 25, 0.2 * Math.PI, 0.8 * Math.PI);
-    ctx.stroke();
-
-    // Eyes
+    // Cloud node
+    ctx.strokeRect(canvas.width / 2 - 120, canvas.height / 2 - 50, 240, 70);
+    ctx.font = '16px -apple-system, sans-serif';
     ctx.fillStyle = '#6366f1';
-    ctx.beginPath();
-    ctx.arc(canvas.width / 2 - 15, canvas.height / 2 - 30, 4, 0, Math.PI * 2);
-    ctx.arc(canvas.width / 2 + 15, canvas.height / 2 - 30, 4, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillText('⚡ CollabBoard AI Sandbox', canvas.width / 2 - 95, canvas.height / 2 - 10);
   }, []);
 
   const handleMiniMouseDown = (e) => {
@@ -92,11 +84,10 @@ const LandingPage = () => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   };
 
-  const handleQuickStart = async () => {
+  const handleQuickStart = () => {
     if (isAuthenticated) {
       navigate('/dashboard');
     } else {
-      // Create guest room or navigate to register
       navigate('/register');
     }
   };
@@ -106,41 +97,41 @@ const LandingPage = () => {
       <Navbar />
 
       {/* Hero Section */}
-      <section className="relative pt-12 pb-20 px-6 sm:px-12 max-w-7xl mx-auto flex flex-col items-center text-center">
+      <section className="relative pt-14 pb-20 px-6 sm:px-12 max-w-7xl mx-auto flex flex-col items-center text-center">
         {/* Glowing aura effect */}
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-gradient-to-tr from-indigo-500/20 via-purple-500/20 to-pink-500/10 blur-[120px] pointer-events-none rounded-full" />
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[380px] bg-gradient-to-tr from-indigo-500/20 via-purple-500/25 to-pink-500/15 blur-[130px] pointer-events-none rounded-full" />
 
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full glass-panel border border-indigo-200 dark:border-indigo-900/60 shadow-sm text-xs font-semibold text-indigo-700 dark:text-indigo-300 mb-6 animate-in fade-in slide-in-from-top-2">
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass-panel border border-indigo-200 dark:border-indigo-900/60 shadow-sm text-xs font-semibold text-indigo-700 dark:text-indigo-300 mb-6 animate-in fade-in slide-in-from-top-2">
           <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-          <span>Real-Time Collaborative Whiteboard • Miro & Excalidraw Inspired</span>
+          <span>CollabBoard AI • Intelligent Real-Time Collaborative Workspace</span>
         </div>
 
         <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight max-w-4xl text-slate-900 dark:text-white leading-[1.12]">
-          Brainstorm and draw together,{' '}
+          Intelligent Canvas for Teams,{' '}
           <span className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 bg-clip-text text-transparent">
-            in real time.
+            Powered by AI.
           </span>
         </h1>
 
         <p className="mt-6 text-base sm:text-lg text-slate-600 dark:text-slate-400 max-w-2xl leading-relaxed">
-          The ultimate collaborative canvas for engineering teams, agile sprints, system architecture,
-          and visual wireframing with live multi-user cursors.
+          The next-generation collaborative workspace uniting Miro's visual freedom with AI diagram generation,
+          decision flowcharts, sticky note brainstorming, and live multi-user cursors.
         </p>
 
         {/* CTA Button Group */}
         <div className="mt-8 flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
           <button
             onClick={handleQuickStart}
-            className="w-full sm:w-auto px-7 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold text-sm shadow-xl shadow-indigo-500/30 transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
+            className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:to-pink-700 text-white font-bold text-sm shadow-xl shadow-indigo-500/30 transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
           >
-            <span>{isAuthenticated ? 'Open Dashboard' : 'Get Started Free'}</span>
+            <span>{isAuthenticated ? 'Open Workspace Dashboard' : 'Get Started Free'}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
           <Link
             to={isAuthenticated ? '/dashboard' : '/login'}
-            className="w-full sm:w-auto px-7 py-3.5 rounded-2xl glass-panel border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900 text-slate-800 dark:text-slate-200 font-semibold text-sm transition-all"
+            className="w-full sm:w-auto px-8 py-4 rounded-2xl glass-panel border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900 text-slate-800 dark:text-slate-200 font-semibold text-sm transition-all"
           >
-            {isAuthenticated ? 'My Whiteboards' : 'Sign In with Existing Account'}
+            {isAuthenticated ? 'View My Whiteboards' : 'Sign In with Demo Account'}
           </Link>
         </div>
 
@@ -153,7 +144,7 @@ const LandingPage = () => {
                 <div className="w-3 h-3 rounded-full bg-rose-500" />
                 <div className="w-3 h-3 rounded-full bg-amber-500" />
                 <div className="w-3 h-3 rounded-full bg-emerald-500" />
-                <span className="ml-2 text-xs font-semibold text-slate-500">Live Canvas Sandbox — Try Drawing Here!</span>
+                <span className="ml-2 text-xs font-semibold text-slate-500">Live Canvas Sandbox — Draw Here!</span>
               </div>
               <div className="flex items-center gap-2">
                 {['#6366f1', '#ec4899', '#10b981', '#f59e0b'].map((c) => (
@@ -187,64 +178,68 @@ const LandingPage = () => {
               />
 
               {/* Floating simulated collaborator badges */}
-              <div className="absolute top-8 left-12 glass-panel px-2.5 py-1 rounded-full shadow-lg border border-indigo-400 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5 pointer-events-none animate-bounce">
+              <div className="absolute top-8 left-12 glass-panel px-3 py-1 rounded-full shadow-lg border border-indigo-400 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5 pointer-events-none animate-bounce">
                 <span className="w-2 h-2 rounded-full bg-indigo-500" />
-                <span>Alex (Product Designer)</span>
+                <span>Alex (Cloud Architect)</span>
               </div>
-              <div className="absolute bottom-12 right-20 glass-panel px-2.5 py-1 rounded-full shadow-lg border border-pink-400 text-[11px] font-bold text-pink-600 dark:text-pink-400 flex items-center gap-1.5 pointer-events-none">
+              <div className="absolute bottom-12 right-20 glass-panel px-3 py-1 rounded-full shadow-lg border border-pink-400 text-[11px] font-bold text-pink-600 dark:text-pink-400 flex items-center gap-1.5 pointer-events-none">
                 <span className="w-2 h-2 rounded-full bg-pink-500" />
-                <span>Sarah (Architect)</span>
+                <span>CollabBoard AI (Synthesizing Diagram...)</span>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Features Grid */}
+      {/* AI Superpowers Showcase Grid */}
       <section className="py-20 px-6 sm:px-12 max-w-7xl mx-auto w-full">
         <div className="text-center mb-16">
+          <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 mb-2">
+            <Sparkles className="w-4 h-4" />
+            <span>AI-Driven Collaborative Acceleration</span>
+          </div>
           <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 dark:text-white">
-            Everything you need for seamless collaboration
+            Transform ideas into production diagrams in seconds
           </h2>
           <p className="mt-3 text-slate-600 dark:text-slate-400 max-w-xl mx-auto text-sm sm:text-base">
-            Engineered with modern web standards for high performance, sub-50ms latency, and intuitive tools.
+            No blank page syndrome. Generate architectures, workflows, and sticky note ideas with structured AI.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div className="glass-panel p-6 rounded-3xl border border-slate-200 dark:border-slate-800 hover:border-indigo-500 transition-all hover:shadow-xl group">
             <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
-              <Zap className="w-6 h-6" />
+              <BrainCircuit className="w-6 h-6" />
             </div>
             <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
-              Sub-50ms Socket.IO Sync
+              AI Architecture Generator
             </h3>
             <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-              Every stroke, shape, and text element synchronizes instantly across connected clients with room-based WebSocket channels.
+              Describe your tech stack in natural language. CollabBoard AI synthesizes clients, gateways, microservices, and databases into editable vector canvas elements.
             </p>
           </div>
 
           <div className="glass-panel p-6 rounded-3xl border border-slate-200 dark:border-slate-800 hover:border-purple-500 transition-all hover:shadow-xl group">
             <div className="w-12 h-12 rounded-2xl bg-purple-500/10 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
+              <GitFork className="w-6 h-6" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
+              AI Flowchart Synthesis
+            </h3>
+            <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+              Converts complex multi-branch business logic and customer onboarding journeys into decision diamonds, process blocks, and labeled connectors.
+            </p>
+          </div>
+
+          <div className="glass-panel p-6 rounded-3xl border border-slate-200 dark:border-slate-800 hover:border-pink-500 transition-all hover:shadow-xl group">
+            <div className="w-12 h-12 rounded-2xl bg-pink-500/10 dark:bg-pink-500/20 text-pink-600 dark:text-pink-400 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
               <Users2 className="w-6 h-6" />
             </div>
             <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
               Live Multi-User Cursors
             </h3>
             <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-              See teammates’ mouse pointers moving smoothly in real-time, accompanied by their names, colors, and current active tools.
-            </p>
-          </div>
-
-          <div className="glass-panel p-6 rounded-3xl border border-slate-200 dark:border-slate-800 hover:border-pink-500 transition-all hover:shadow-xl group">
-            <div className="w-12 h-12 rounded-2xl bg-pink-500/10 dark:bg-pink-500/20 text-pink-600 dark:text-pink-400 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
-              <Pencil className="w-6 h-6" />
-            </div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
-              8 Professional Drawing Tools
-            </h3>
-            <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-              Smooth pen, precision eraser, straight lines, directional arrows, rectangles, circles, and inline typography.
+              Experience seamless sub-50ms Socket.IO synchronization. Watch peers' pointers glide across the board with author name tags, avatar colors, and tools.
             </p>
           </div>
 
@@ -253,10 +248,10 @@ const LandingPage = () => {
               <Layers className="w-6 h-6" />
             </div>
             <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
-              Pan, Zoom & Infinite Canvas
+              Minimap & Infinite Canvas
             </h3>
             <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-              Effortlessly navigate large diagrams with smooth multi-touch wheel zooming (20% to 300%) and spacebar drag panning.
+              Navigate large systems with bird's-eye minimap tracking, smooth multi-touch wheel zooming (20% to 300%), snap-to-grid alignment, and fit-to-screen centering.
             </p>
           </div>
 
@@ -265,46 +260,30 @@ const LandingPage = () => {
               <Download className="w-6 h-6" />
             </div>
             <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
-              Retina PNG Export
+              PNG, SVG & PDF Exports
             </h3>
             <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-              Download your boards as crystal-clear 2x high-resolution PNG images ready for documentation, Slack, or portfolio presentations.
+              Export to 2x retina PNG images, resolution-independent vector SVG graphics, or formatted PDF documents ready for documentation and stakeholder presentations.
             </p>
           </div>
 
           <div className="glass-panel p-6 rounded-3xl border border-slate-200 dark:border-slate-800 hover:border-cyan-500 transition-all hover:shadow-xl group">
             <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 dark:bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
-              <Shield className="w-6 h-6" />
+              <MessageSquare className="w-6 h-6" />
             </div>
             <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
-              JWT & MongoDB Atlas Cloud
+              Comments & Live Reactions
             </h3>
             <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-              Encrypted password hashing with bcrypt, stateless JWT tokens, and persistent board saving with automatic recovery.
+              Drop pinned threaded discussion markers at exact coordinates and fire real-time floating emojis (👍, ❤️, 🚀, 🔥) across teammates' screens.
             </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Tech Stack Strip */}
-      <section className="py-12 border-y border-slate-200 dark:border-slate-800 bg-white/40 dark:bg-slate-900/40">
-        <div className="max-w-7xl mx-auto px-6 text-center">
-          <p className="text-xs font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-6">
-            Architected With Modern Production-Grade Tech
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-8 text-xs font-semibold text-slate-700 dark:text-slate-300">
-            {['React 19', 'Vite', 'Tailwind CSS', 'HTML5 Canvas API', 'Node.js', 'Express', 'Socket.IO', 'MongoDB / Mongoose', 'JWT & Bcrypt'].map((tech) => (
-              <span key={tech} className="px-3.5 py-1.5 rounded-xl glass-panel border border-slate-200 dark:border-slate-800 shadow-sm">
-                {tech}
-              </span>
-            ))}
           </div>
         </div>
       </section>
 
       {/* Footer */}
       <footer className="mt-auto py-8 px-6 text-center text-xs text-slate-500 dark:text-slate-500 border-t border-slate-200 dark:border-slate-800">
-        <p>© 2026 CollabBoard • Real-Time Collaborative Whiteboard Architecture Portfolio Project</p>
+        <p>© 2026 CollabBoard AI • Intelligent Real-Time Collaborative Workspace Portfolio Project</p>
       </footer>
     </div>
   );

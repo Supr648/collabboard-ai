@@ -33,21 +33,24 @@ export const createWhiteboard = async (req, res, next) => {
       return res.status(201).json({
         success: true,
         whiteboard: populatedBoard,
+        data: populatedBoard,
       });
     } else {
       const board = memoryStore.createWhiteboard(boardData);
+      const populated = {
+        ...board,
+        owner: {
+          _id: userId,
+          id: userId,
+          name: req.user.name,
+          email: req.user.email,
+          avatarColor: req.user.avatarColor,
+        },
+      };
       return res.status(201).json({
         success: true,
-        whiteboard: {
-          ...board,
-          owner: {
-            _id: userId,
-            id: userId,
-            name: req.user.name,
-            email: req.user.email,
-            avatarColor: req.user.avatarColor,
-          },
-        },
+        whiteboard: populated,
+        data: populated,
       });
     }
   } catch (error) {
@@ -102,25 +105,31 @@ export const getWhiteboardByRoomId = async (req, res, next) => {
     const { roomId } = req.params;
 
     if (getIsMongoConnected()) {
-      const board = await Whiteboard.findOne({ roomId }).populate('owner', 'name email avatarColor');
+      let board = await Whiteboard.findOne({ roomId }).populate('owner', 'name email avatarColor');
+      if (!board) {
+        try {
+          board = await Whiteboard.findById(roomId).populate('owner', 'name email avatarColor');
+        } catch (_) {}
+      }
 
       if (!board) {
         return res.status(404).json({
           success: false,
-          message: 'Whiteboard not found with the specified Room ID',
+          message: 'Whiteboard not found with the specified ID or Room ID',
         });
       }
 
       return res.json({
         success: true,
         whiteboard: board,
+        data: board,
       });
     } else {
-      const board = memoryStore.findWhiteboardByRoomId(roomId);
+      let board = memoryStore.findWhiteboardByRoomId(roomId) || memoryStore.findWhiteboardById(roomId);
       if (!board) {
         return res.status(404).json({
           success: false,
-          message: 'Whiteboard not found with the specified Room ID',
+          message: 'Whiteboard not found with the specified ID or Room ID',
         });
       }
 
@@ -139,12 +148,15 @@ export const getWhiteboardByRoomId = async (req, res, next) => {
         }
       }
 
+      const populated = {
+        ...board,
+        owner: ownerInfo,
+      };
+
       return res.json({
         success: true,
-        whiteboard: {
-          ...board,
-          owner: ownerInfo,
-        },
+        whiteboard: populated,
+        data: populated,
       });
     }
   } catch (error) {
@@ -304,3 +316,68 @@ export const deleteWhiteboard = async (req, res, next) => {
     next(error);
   }
 };
+
+// @desc    Duplicate an existing whiteboard
+// @route   POST /api/whiteboards/:id/duplicate
+// @access  Private
+export const duplicateWhiteboard = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user._id || req.user.id;
+    let original;
+
+    if (getIsMongoConnected()) {
+      original = await Whiteboard.findById(id);
+      if (!original) {
+        original = await Whiteboard.findOne({ roomId: id });
+      }
+    } else {
+      original = memoryStore.findWhiteboardById(id) || memoryStore.findWhiteboardByRoomId(id);
+    }
+
+    if (!original) {
+      return res.status(404).json({ success: false, message: 'Whiteboard not found' });
+    }
+
+    const roomId = generateRoomId();
+    const copyData = {
+      title: `Copy of ${original.title || 'Whiteboard'}`,
+      roomId,
+      owner: userId,
+      elements: original.elements ? JSON.parse(JSON.stringify(original.elements)) : [],
+      thumbnail: original.thumbnail || '',
+      collaborators: [],
+      isPublic: original.isPublic !== undefined ? original.isPublic : true,
+    };
+
+    if (getIsMongoConnected()) {
+      const copy = await Whiteboard.create(copyData);
+      const populated = await Whiteboard.findById(copy._id).populate('owner', 'name email avatarColor');
+      return res.status(201).json({
+        success: true,
+        whiteboard: populated,
+        data: populated,
+      });
+    } else {
+      const copy = memoryStore.createWhiteboard(copyData);
+      const populated = {
+        ...copy,
+        owner: {
+          _id: userId,
+          id: userId,
+          name: req.user.name,
+          email: req.user.email,
+          avatarColor: req.user.avatarColor,
+        },
+      };
+      return res.status(201).json({
+        success: true,
+        whiteboard: populated,
+        data: populated,
+      });
+    }
+  } catch (error) {
+    next(error);
+  }
+};
+

@@ -1,11 +1,24 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { getSocket } from '../socket/socket';
 
-export const useCollaboration = ({ roomId, user, onRemoteSync, onRemoteAdd, onRemoteDelete, onRemoteClear }) => {
+export const useCollaboration = ({
+  roomId,
+  user,
+  role = 'editor',
+  onRemoteSync,
+  onRemoteAdd,
+  onRemoteUpdate,
+  onRemoteDelete,
+  onRemoteClear,
+}) => {
   const [participants, setParticipants] = useState([]);
   const [cursors, setCursors] = useState({});
   const [remoteLiveStroke, setRemoteLiveStroke] = useState(null);
-  const [connectionStatus, setConnectionStatus] = useState('connecting'); // 'connected' | 'connecting' | 'disconnected'
+  const [connectionStatus, setConnectionStatus] = useState('connecting');
+  const [incomingReactions, setIncomingReactions] = useState([]);
+  const [comments, setComments] = useState([]);
+  const [typingUsers, setTypingUsers] = useState({});
+
   const lastCursorEmitRef = useRef(0);
   const socketRef = useRef(null);
 
@@ -15,7 +28,6 @@ export const useCollaboration = ({ roomId, user, onRemoteSync, onRemoteAdd, onRe
     const socket = getSocket();
     socketRef.current = socket;
 
-    // Room join payload
     const currentUser = user || {
       id: `guest_${Math.random().toString(36).substr(2, 6)}`,
       name: `Guest ${Math.floor(Math.random() * 900 + 100)}`,
@@ -23,7 +35,7 @@ export const useCollaboration = ({ roomId, user, onRemoteSync, onRemoteAdd, onRe
     };
 
     if (socket.connected) {
-      socket.emit('join-room', { roomId, user: currentUser });
+      socket.emit('join-room', { roomId, user: currentUser, role });
       setConnectionStatus('connected');
     } else {
       socket.connect();
@@ -31,7 +43,7 @@ export const useCollaboration = ({ roomId, user, onRemoteSync, onRemoteAdd, onRe
 
     const onConnect = () => {
       setConnectionStatus('connected');
-      socket.emit('join-room', { roomId, user: currentUser });
+      socket.emit('join-room', { roomId, user: currentUser, role });
     };
 
     const onDisconnect = () => {
@@ -62,6 +74,10 @@ export const useCollaboration = ({ roomId, user, onRemoteSync, onRemoteAdd, onRe
       if (onRemoteAdd) onRemoteAdd(element);
     };
 
+    const onRemoteElementUpdate = (element) => {
+      if (onRemoteUpdate) onRemoteUpdate(element);
+    };
+
     const onRemoteElementDelete = ({ elementId }) => {
       if (onRemoteDelete) onRemoteDelete(elementId);
     };
@@ -80,6 +96,45 @@ export const useCollaboration = ({ roomId, user, onRemoteSync, onRemoteAdd, onRe
       setRemoteLiveStroke(stroke);
     };
 
+    // Reactions listener
+    const onReactionReceive = (reaction) => {
+      setIncomingReactions((prev) => [...prev.slice(-10), reaction]);
+      setTimeout(() => {
+        setIncomingReactions((prev) => prev.filter((r) => r.id !== reaction.id));
+      }, 3000);
+    };
+
+    // Comments listener
+    const onCommentSync = ({ comment }) => {
+      setComments((prev) => {
+        const idx = prev.findIndex((c) => c.id === comment.id);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = comment;
+          return next;
+        }
+        return [...prev, comment];
+      });
+    };
+
+    const onCommentResolved = ({ commentId }) => {
+      setComments((prev) =>
+        prev.map((c) => (c.id === commentId ? { ...c, resolved: true } : c))
+      );
+    };
+
+    // Typing listener
+    const onUserTyping = ({ user, isTyping }) => {
+      setTypingUsers((prev) => {
+        if (!isTyping) {
+          const next = { ...prev };
+          delete next[user.id];
+          return next;
+        }
+        return { ...prev, [user.id]: user.name };
+      });
+    };
+
     // Attach listeners
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
@@ -87,12 +142,17 @@ export const useCollaboration = ({ roomId, user, onRemoteSync, onRemoteAdd, onRe
     socket.on('cursor-update', onCursorUpdate);
     socket.on('cursor-remove', onCursorRemove);
     socket.on('remote-element-add', onRemoteElementAdd);
+    socket.on('remote-element-update', onRemoteElementUpdate);
     socket.on('remote-element-delete', onRemoteElementDelete);
     socket.on('remote-canvas-clear', onRemoteCanvasClear);
     socket.on('remote-canvas-sync', onRemoteCanvasSync);
     socket.on('remote-draw-live', onRemoteDrawLive);
+    socket.on('reaction-receive', onReactionReceive);
+    socket.on('comment-sync', onCommentSync);
+    socket.on('comment-resolved', onCommentResolved);
+    socket.on('user-typing', onUserTyping);
 
-    // Prune stale cursors every 8 seconds
+    // Prune stale cursors every 5s
     const pruneInterval = setInterval(() => {
       const now = Date.now();
       setCursors((prev) => {
@@ -117,16 +177,21 @@ export const useCollaboration = ({ roomId, user, onRemoteSync, onRemoteAdd, onRe
       socket.off('cursor-update', onCursorUpdate);
       socket.off('cursor-remove', onCursorRemove);
       socket.off('remote-element-add', onRemoteElementAdd);
+      socket.off('remote-element-update', onRemoteElementUpdate);
       socket.off('remote-element-delete', onRemoteElementDelete);
       socket.off('remote-canvas-clear', onRemoteCanvasClear);
       socket.off('remote-canvas-sync', onRemoteCanvasSync);
       socket.off('remote-draw-live', onRemoteDrawLive);
+      socket.off('reaction-receive', onReactionReceive);
+      socket.off('comment-sync', onCommentSync);
+      socket.off('comment-resolved', onCommentResolved);
+      socket.off('user-typing', onUserTyping);
 
       socket.emit('leave-room');
     };
-  }, [roomId, user]);
+  }, [roomId, user, role]);
 
-  // Throttled cursor emission (max once every 30ms for 30fps smooth live tracking)
+  // Throttled cursor broadcast
   const emitCursorMove = useCallback(
     (x, y, activeTool) => {
       const now = Date.now();
@@ -146,6 +211,16 @@ export const useCollaboration = ({ roomId, user, onRemoteSync, onRemoteAdd, onRe
       const socket = socketRef.current || getSocket();
       if (socket && socket.connected) {
         socket.emit('element-add', { roomId, element });
+      }
+    },
+    [roomId]
+  );
+
+  const emitElementUpdate = useCallback(
+    (element) => {
+      const socket = socketRef.current || getSocket();
+      if (socket && socket.connected) {
+        socket.emit('element-update', { roomId, element });
       }
     },
     [roomId]
@@ -178,15 +253,75 @@ export const useCollaboration = ({ roomId, user, onRemoteSync, onRemoteAdd, onRe
     [roomId]
   );
 
+  const emitReaction = useCallback(
+    (emoji, x, y) => {
+      const socket = socketRef.current || getSocket();
+      if (socket && socket.connected) {
+        socket.emit('reaction-trigger', { roomId, emoji, x, y });
+      }
+    },
+    [roomId]
+  );
+
+  const emitCommentAdd = useCallback(
+    (comment) => {
+      const socket = socketRef.current || getSocket();
+      if (socket && socket.connected) {
+        socket.emit('comment-add', { roomId, comment });
+      }
+      setComments((prev) => {
+        const idx = prev.findIndex((c) => c.id === comment.id);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = comment;
+          return next;
+        }
+        return [...prev, comment];
+      });
+    },
+    [roomId]
+  );
+
+  const emitCommentResolve = useCallback(
+    (commentId) => {
+      const socket = socketRef.current || getSocket();
+      if (socket && socket.connected) {
+        socket.emit('comment-resolve', { roomId, commentId });
+      }
+      setComments((prev) =>
+        prev.map((c) => (c.id === commentId ? { ...c, resolved: true } : c))
+      );
+    },
+    [roomId]
+  );
+
+  const emitTyping = useCallback(
+    (isTyping) => {
+      const socket = socketRef.current || getSocket();
+      if (socket && socket.connected) {
+        socket.emit('typing-status', { roomId, isTyping });
+      }
+    },
+    [roomId]
+  );
+
   return {
     participants,
     cursors,
     remoteLiveStroke,
     connectionStatus,
+    incomingReactions,
+    comments,
+    typingUsers,
     emitCursorMove,
     emitElementAdd,
+    emitElementUpdate,
     emitElementDelete,
     emitCanvasClear,
     emitCanvasSync,
+    emitReaction,
+    emitCommentAdd,
+    emitCommentResolve,
+    emitTyping,
   };
 };
