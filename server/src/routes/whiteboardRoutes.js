@@ -21,6 +21,7 @@ router.get('/:roomId', optionalAuth, getWhiteboardByRoomId);
 router.post('/:id/duplicate', protect, duplicateWhiteboard);
 router.put('/:id', protect, updateWhiteboard);
 router.put('/room/:roomId/save', optionalAuth, saveWhiteboardState);
+router.put('/room/:roomId', optionalAuth, saveWhiteboardState);
 router.post('/:id/versions', optionalAuth, createVersionSnapshot);
 router.get('/:id/versions', optionalAuth, getVersionHistory);
 router.post('/room/:roomId/versions', optionalAuth, createVersionSnapshot);

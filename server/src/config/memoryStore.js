@@ -254,6 +254,18 @@ class MemoryStore {
     return user;
   }
 
+  updateUser(userId, updates) {
+    const user = this.users.get(userId);
+    if (!user) return null;
+    if (updates.name) user.name = updates.name;
+    if (updates.avatarColor) user.avatarColor = updates.avatarColor;
+    if (updates.primaryWorkspaceType) user.primaryWorkspaceType = updates.primaryWorkspaceType;
+    user.updatedAt = new Date().toISOString();
+    this.users.set(userId, user);
+    this.saveToFile();
+    return user;
+  }
+
   // Whiteboard operations
   createWhiteboard(boardData) {
     const id = boardData._id || 'wb_' + Math.random().toString(36).substr(2, 9);

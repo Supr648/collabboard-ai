@@ -14,6 +14,7 @@ const suites = [
   { name: '6. Community Library & AI Natural Language', file: 'test_community_and_notifications.js' },
   { name: '7. Full Integration E2E Test Suite (24 tests)', file: 'test_full_suite.js' },
   { name: '8. Authentication & Password Reset Flows (9 tests)', file: 'test_auth_flows.js' },
+  { name: '9. Full-Stack End-to-End Connectivity & Socket Suite (12 tests)', file: 'test_e2e_backend_connection.js' },
 ];
 
 console.log('================================================================');

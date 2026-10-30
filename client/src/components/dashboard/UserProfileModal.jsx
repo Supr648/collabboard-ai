@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Modal from '../common/Modal';
 import { useAuth } from '../../context/AuthContext';
-import { User, Mail, Sparkles, Check, LogOut, Shield } from 'lucide-react';
+import { User, Mail, Sparkles, Check, LogOut, Shield, Loader2, AlertCircle } from 'lucide-react';
 
 const AVATAR_COLORS = [
   '#6366f1', '#ec4899', '#8b5cf6', '#10b981',
@@ -9,28 +9,46 @@ const AVATAR_COLORS = [
 ];
 
 const UserProfileModal = ({ isOpen, onClose }) => {
-  const { user, logout } = useAuth();
+  const { user, updateUserProfile, logout } = useAuth();
   const [name, setName] = useState(user?.name || '');
   const [selectedColor, setSelectedColor] = useState(user?.avatarColor || '#6366f1');
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
-    // Update local user state
-    user.name = name;
-    user.avatarColor = selectedColor;
-    setSaved(true);
-    setTimeout(() => {
-      setSaved(false);
-      onClose();
-    }, 800);
+    if (!name.trim()) {
+      setError('Display name is required');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError('');
+      if (updateUserProfile) {
+        await updateUserProfile({ name: name.trim(), avatarColor: selectedColor });
+      } else if (user) {
+        user.name = name.trim();
+        user.avatarColor = selectedColor;
+      }
+      setSaved(true);
+      setTimeout(() => {
+        setSaved(false);
+        onClose();
+      }, 700);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to update profile settings');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="User Profile & Settings" maxWidth="max-w-lg">
       <form onSubmit={handleSave} className="space-y-5">
         {/* Profile Card Header */}
-        <div className="flex items-center gap-4 p-4 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50">
+        <div className="flex items-center gap-4 p-4 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50">
           <div
             className="w-14 h-14 rounded-2xl flex items-center justify-center text-white text-xl font-black uppercase shadow-md transition-transform hover:scale-105"
             style={{ backgroundColor: selectedColor }}
@@ -46,6 +64,13 @@ const UserProfileModal = ({ isOpen, onClose }) => {
           </div>
         </div>
 
+        {error && (
+          <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 flex items-center gap-2 text-xs text-rose-700 dark:text-rose-300">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
         {/* Full Name */}
         <div>
           <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
@@ -58,7 +83,7 @@ const UserProfileModal = ({ isOpen, onClose }) => {
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white/70 dark:bg-slate-800/70 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white/70 dark:bg-slate-800/70 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-colors"
             />
           </div>
         </div>
@@ -68,16 +93,17 @@ const UserProfileModal = ({ isOpen, onClose }) => {
           <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
             Collaborator Cursor & Avatar Color
           </label>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {AVATAR_COLORS.map((c) => (
               <button
                 key={c}
                 type="button"
                 onClick={() => setSelectedColor(c)}
-                className={`w-7 h-7 rounded-xl transition-transform hover:scale-110 flex items-center justify-center ${
-                  selectedColor === c ? 'ring-2 ring-indigo-500 scale-110' : ''
+                className={`w-7 h-7 rounded-xl transition-transform hover:scale-110 flex items-center justify-center cursor-pointer ${
+                  selectedColor === c ? 'ring-2 ring-indigo-500 ring-offset-2 scale-110' : ''
                 }`}
                 style={{ backgroundColor: c }}
+                title={`Color ${c}`}
               >
                 {selectedColor === c && <Check className="w-4 h-4 text-white" />}
               </button>
@@ -101,7 +127,7 @@ const UserProfileModal = ({ isOpen, onClose }) => {
           <button
             type="button"
             onClick={logout}
-            className="flex items-center gap-1.5 text-xs font-semibold text-rose-600 hover:text-rose-700"
+            className="flex items-center gap-1.5 text-xs font-semibold text-rose-600 hover:text-rose-700 cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5" />
             <span>Sign Out</span>
@@ -111,15 +137,22 @@ const UserProfileModal = ({ isOpen, onClose }) => {
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+              disabled={saving}
+              className="px-4 py-2 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-500/25 flex items-center gap-1.5"
+              disabled={saving}
+              className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-500/25 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
-              {saved ? (
+              {saving ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Saving...</span>
+                </>
+              ) : saved ? (
                 <>
                   <Check className="w-3.5 h-3.5" />
                   <span>Saved!</span>

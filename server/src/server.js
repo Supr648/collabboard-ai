@@ -113,7 +113,7 @@ app.get('/', (req, res) => {
 });
 
 // Production Health & Diagnostics Check Endpoint
-app.get('/api/health', (req, res) => {
+const healthHandler = (req, res) => {
   const memory = process.memoryUsage();
   const uptimeSeconds = Math.floor(process.uptime());
   const hours = Math.floor(uptimeSeconds / 3600);
@@ -151,7 +151,10 @@ app.get('/api/health', (req, res) => {
       },
     },
   });
-});
+};
+
+app.get('/health', healthHandler);
+app.get('/api/health', healthHandler);
 
 // Mount Routes
 app.use('/api/auth', authRoutes);

@@ -354,3 +354,57 @@ export const resetPassword = async (req, res, next) => {
     next(error);
   }
 };
+
+// @desc    Update user profile
+// @route   PUT /api/auth/profile
+// @access  Private
+export const updateProfile = async (req, res, next) => {
+  try {
+    const { name, avatarColor, primaryWorkspaceType } = req.body;
+    const userId = req.user._id || req.user.id;
+
+    if (getIsMongoConnected()) {
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+      if (name && name.trim()) user.name = name.trim();
+      if (avatarColor) user.avatarColor = avatarColor;
+      if (primaryWorkspaceType) user.primaryWorkspaceType = primaryWorkspaceType;
+      await user.save();
+
+      return res.json({
+        success: true,
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          avatarColor: user.avatarColor,
+          primaryWorkspaceType: user.primaryWorkspaceType,
+        },
+      });
+    } else {
+      const updated = memoryStore.updateUser(userId, {
+        name: name ? name.trim() : undefined,
+        avatarColor,
+        primaryWorkspaceType,
+      });
+      if (!updated) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+
+      return res.json({
+        success: true,
+        user: {
+          id: updated._id,
+          name: updated.name,
+          email: updated.email,
+          avatarColor: updated.avatarColor,
+          primaryWorkspaceType: updated.primaryWorkspaceType,
+        },
+      });
+    }
+  } catch (error) {
+    next(error);
+  }
+};
