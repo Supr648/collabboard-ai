@@ -1,5 +1,8 @@
 import express from 'express';
 import http from 'http';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -24,6 +27,11 @@ dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const clientDistPath = path.resolve(__dirname, '../../client/dist');
+const hasClientDist = fs.existsSync(clientDistPath);
 
 // Security Headers Middleware
 app.use((req, res, next) => {
@@ -101,10 +109,22 @@ const io = new SocketIOServer(server, {
 // Setup Real-Time Socket Handlers
 setupSocketHandlers(io);
 
-// Root information endpoint
+// Favicon and Service Worker handlers
 app.get('/service-worker.js', (req, res) => res.status(204).end());
-app.get('/favicon.ico', (req, res) => res.status(204).end());
+app.get('/favicon.ico', (req, res) => {
+  if (hasClientDist && fs.existsSync(path.join(clientDistPath, 'favicon.ico'))) {
+    return res.sendFile(path.join(clientDistPath, 'favicon.ico'));
+  }
+  res.status(204).end();
+});
+
+// Root endpoint: intelligently responds with SPA HTML for browser navigations,
+// or JSON service diagnostics for API clients/health probes
 app.get('/', (req, res) => {
+  const acceptsHtml = req.headers.accept && req.headers.accept.includes('text/html');
+  if (hasClientDist && acceptsHtml) {
+    return res.sendFile(path.join(clientDistPath, 'index.html'));
+  }
   res.json({
     success: true,
     service: 'CollabBoard AI Intelligent Real-Time Collaborative Workspace API',
@@ -171,6 +191,17 @@ app.use('/api/teacher', teacherRoutes);
 app.use('/api/personal', personalRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/notifications', notificationRoutes);
+
+// Static SPA client serving (for single-service / monolith deployments)
+if (hasClientDist) {
+  app.use(express.static(clientDistPath));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/socket.io') || req.path === '/health') {
+      return next();
+    }
+    res.sendFile(path.join(clientDistPath, 'index.html'));
+  });
+}
 
 // Error Handling Middlewares
 app.use(notFound);
