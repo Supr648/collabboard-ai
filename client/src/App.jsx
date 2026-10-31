@@ -29,7 +29,11 @@ function App() {
 
               {/* Authentication */}
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/signin" element={<Navigate to="/login" replace />} />
+              <Route path="/sign-in" element={<Navigate to="/login" replace />} />
               <Route path="/register" element={<RegisterPage />} />
+              <Route path="/signup" element={<RegisterPage />} />
+              <Route path="/sign-up" element={<RegisterPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
 
