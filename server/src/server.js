@@ -28,6 +28,9 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
+// Trust reverse proxy headers (Cloudflare, Render, Vercel)
+app.set('trust proxy', 1);
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const clientDistPath = path.resolve(__dirname, '../../client/dist');
@@ -47,9 +50,7 @@ app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
     const duration = Date.now() - start;
-    if (res.statusCode >= 400 || process.env.NODE_ENV === 'production' || process.env.DEBUG_LOGS === 'true') {
-      console.log(`[HTTP] ${new Date().toISOString()} ${req.method} ${req.originalUrl || req.url} ${res.statusCode} ${duration}ms - ${req.ip || req.socket.remoteAddress}`);
-    }
+    console.log(`[HTTP] ${new Date().toISOString()} ${req.method} ${req.originalUrl || req.url} ${res.statusCode} ${duration}ms`);
   });
   next();
 });
@@ -78,6 +79,7 @@ const apiLimiter = rateLimit({
   max: 1000, // Limit each IP to 1000 requests per 15 minutes
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   message: { success: false, message: 'Too many requests, please try again later.' },
 });
 
@@ -87,12 +89,14 @@ const authLimiter = rateLimit({
   max: 100, // Limit each IP to 100 login/register requests per 15 minutes
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   message: { success: false, message: 'Too many authentication attempts, please try again in 15 minutes.' },
 });
 
 app.use('/api', apiLimiter);
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
+app.use('/api/auth/google', authLimiter);
 
 // Attach Socket.IO
 const io = new SocketIOServer(server, {

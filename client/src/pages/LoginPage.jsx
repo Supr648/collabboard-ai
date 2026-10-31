@@ -73,20 +73,18 @@ const LoginPage = () => {
     try {
       if (typeof loginWithGoogle === 'function') {
         await loginWithGoogle();
-        navigate(from, { replace: true });
       } else {
         const res = await googleAuthApi();
         if (res && res.token) {
           localStorage.setItem('token', res.token);
-          window.location.href = from;
         }
       }
+      window.location.href = from || '/dashboard';
     } catch (err) {
       console.error('Google Sign-In Error:', err);
       setError(
         err.response?.data?.message || err.message || 'Google sign-in temporarily unavailable. Please refresh and try again.'
       );
-    } finally {
       setOauthLoading(false);
     }
   };

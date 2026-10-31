@@ -104,20 +104,18 @@ const RegisterPage = () => {
     try {
       if (typeof loginWithGoogle === 'function') {
         await loginWithGoogle();
-        navigate('/dashboard');
       } else {
         const res = await googleAuthApi();
         if (res && res.token) {
           localStorage.setItem('token', res.token);
-          window.location.href = '/dashboard';
         }
       }
+      window.location.href = '/dashboard';
     } catch (err) {
       console.error('Google Sign-Up Error:', err);
       setError(
         err.response?.data?.message || err.message || 'Google registration temporarily unavailable. Please refresh and try again.'
       );
-    } finally {
       setOauthLoading(false);
     }
   };
