@@ -504,13 +504,16 @@ const DashboardPage = () => {
                       {[1, 2, 3, 4, 5, 6].map((i) => (
                         <div
                           key={i}
-                          className="glass-panel rounded-3xl overflow-hidden border border-slate-200/80 dark:border-slate-800/80 p-4 space-y-4 animate-pulse bg-white/40 dark:bg-slate-900/40"
+                          className="glass-panel rounded-3xl overflow-hidden border border-slate-200/90 dark:border-slate-800/90 p-4 space-y-4 bg-white/70 dark:bg-slate-900/60 backdrop-blur-xl shadow-xs"
                         >
-                          <div className="aspect-video w-full rounded-2xl bg-slate-200 dark:bg-slate-800" />
-                          <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded-lg w-3/4" />
-                          <div className="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-slate-800">
-                            <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded w-1/3" />
-                            <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded w-1/5" />
+                          <div className="aspect-video w-full rounded-2xl skeleton-shimmer" />
+                          <div className="space-y-2 pt-1">
+                            <div className="h-4 skeleton-shimmer rounded-lg w-3/4" />
+                            <div className="h-3 skeleton-shimmer rounded-lg w-1/2" />
+                          </div>
+                          <div className="flex justify-between items-center pt-3 border-t border-slate-100 dark:border-slate-800/80">
+                            <div className="h-3 skeleton-shimmer rounded-md w-1/3" />
+                            <div className="h-3.5 skeleton-shimmer rounded-md w-16" />
                           </div>
                         </div>
                       ))}

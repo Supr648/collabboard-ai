@@ -149,10 +149,11 @@ const CollaboratorsBar = ({
           <span className="hidden sm:inline">Copilot</span>
         </button>
 
-        {/* AI Assistant Modal Button (Glowing Primary) */}
+        {/* AI Assistant Modal Button */}
         <button
           onClick={onOpenAi}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white text-xs font-bold shadow-lg shadow-purple-500/25 transition-all hover:scale-105 active:scale-95 animate-pulse"
+          title="Open AI Diagram & Mind Map Studio"
+          className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-xs font-bold shadow-md shadow-purple-500/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
         >
           <Sparkles className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">AI Studio</span>

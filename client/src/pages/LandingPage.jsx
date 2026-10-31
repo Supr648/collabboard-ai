@@ -285,7 +285,7 @@ const LandingPage = () => {
 
       {/* Footer */}
       <footer className="mt-auto py-8 px-6 text-center text-xs text-slate-500 dark:text-slate-500 border-t border-slate-200 dark:border-slate-800">
-        <p>© 2026 CollabBoard AI • Intelligent Real-Time Collaborative Workspace Portfolio Project</p>
+        <p>© 2026 CollabBoard AI • The Intelligent Collaborative Workspace for Teams, Creators & Educators. All rights reserved.</p>
       </footer>
     </div>
   </PageTransition>
