@@ -10,6 +10,11 @@ export const loginUser = async (credentials) => {
   return response.data;
 };
 
+export const googleAuthApi = async (payload = {}) => {
+  const response = await api.post('/auth/google', payload);
+  return response.data;
+};
+
 export const getMe = async () => {
   const response = await api.get('/auth/me');
   return response.data;

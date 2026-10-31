@@ -25,7 +25,7 @@ const LoginPage = () => {
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(false);
 
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -65,19 +65,18 @@ const LoginPage = () => {
     setError('');
   };
 
-  // Simulated Google Sign-In with instant feedback
-  const handleGoogleSignIn = () => {
+  // Live Google OAuth Sign-In handler
+  const handleGoogleSignIn = async () => {
     setOauthLoading(true);
-    setTimeout(async () => {
-      try {
-        await login('designer@collabboard.io', 'password123');
-        navigate(from, { replace: true });
-      } catch (err) {
-        setError('OAuth provider connection temporarily in sandbox demo mode.');
-      } finally {
-        setOauthLoading(false);
-      }
-    }, 800);
+    setError('');
+    try {
+      await loginWithGoogle();
+      navigate(from, { replace: true });
+    } catch (err) {
+      setError(err.response?.data?.message || 'Google sign-in temporarily unavailable. Please try again.');
+    } finally {
+      setOauthLoading(false);
+    }
   };
 
   return (

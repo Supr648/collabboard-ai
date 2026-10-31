@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { loginUser, registerUser, getMe, updateProfile } from '../api/auth';
+import { loginUser, registerUser, googleAuthApi, getMe, updateProfile } from '../api/auth';
 
 const AuthContext = createContext();
 
@@ -40,6 +40,16 @@ export const AuthProvider = ({ children }) => {
     return data;
   };
 
+  const loginWithGoogle = async (googleData = {}) => {
+    const data = await googleAuthApi(googleData);
+    if (data.success && data.token) {
+      localStorage.setItem('token', data.token);
+      setToken(data.token);
+      setUser(data.user);
+    }
+    return data;
+  };
+
   const register = async (name, email, password, primaryWorkspaceType = 'team') => {
     const data = await registerUser({ name, email, password, primaryWorkspaceType });
     if (data.success && data.token) {
@@ -72,6 +82,7 @@ export const AuthProvider = ({ children }) => {
         isAuthenticated: !!user,
         loading,
         login,
+        loginWithGoogle,
         register,
         updateUserProfile,
         logout,

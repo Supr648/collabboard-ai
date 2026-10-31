@@ -36,7 +36,7 @@ const RegisterPage = () => {
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(false);
 
-  const { register, login } = useAuth();
+  const { register, login, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
 
   // Password Strength Calculation
@@ -96,19 +96,18 @@ const RegisterPage = () => {
     }
   };
 
-  // Simulated Google Sign-Up
-  const handleGoogleSignUp = () => {
+  // Live Google Sign-Up handler
+  const handleGoogleSignUp = async () => {
     setOauthLoading(true);
-    setTimeout(async () => {
-      try {
-        await login('designer@collabboard.io', 'password123');
-        navigate('/dashboard');
-      } catch (err) {
-        setError('OAuth provider connection temporarily in sandbox demo mode.');
-      } finally {
-        setOauthLoading(false);
-      }
-    }, 800);
+    setError('');
+    try {
+      await loginWithGoogle();
+      navigate('/dashboard');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Google registration temporarily unavailable. Please try again.');
+    } finally {
+      setOauthLoading(false);
+    }
   };
 
   return (

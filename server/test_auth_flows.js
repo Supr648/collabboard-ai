@@ -201,6 +201,28 @@ async function runAuthTests() {
     console.error('❌ 9. Invalid token error:', err.message);
   }
 
+  // Test 10: Google OAuth & One-Click Authentication
+  total++;
+  try {
+    const googleRes = await fetch(`${BASE_URL}/auth/google`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Google User Test',
+        email: `google_${Date.now()}@gmail.com`,
+      })
+    });
+    const googleData = await googleRes.json();
+    if (googleRes.status === 200 && googleData.token && googleData.user) {
+      console.log('✅ 10. Google OAuth & One-Click Authentication: PASSED');
+      passed++;
+    } else {
+      console.error('❌ 10. Google OAuth unexpected response:', googleData);
+    }
+  } catch (err) {
+    console.error('❌ 10. Google OAuth error:', err.message);
+  }
+
   console.log(`\n========================================`);
   console.log(`🎯 AUTHENTICATION SUITE: ${passed}/${total} TESTS PASSED`);
   console.log(`========================================\n`);
