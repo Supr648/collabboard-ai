@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+import { googleAuthApi } from '../api/auth';
 import PageTransition from '../components/common/PageTransition';
 import AuthShowcase from '../components/auth/AuthShowcase';
 import {
@@ -101,10 +102,21 @@ const RegisterPage = () => {
     setOauthLoading(true);
     setError('');
     try {
-      await loginWithGoogle();
-      navigate('/dashboard');
+      if (typeof loginWithGoogle === 'function') {
+        await loginWithGoogle();
+        navigate('/dashboard');
+      } else {
+        const res = await googleAuthApi();
+        if (res && res.token) {
+          localStorage.setItem('token', res.token);
+          window.location.href = '/dashboard';
+        }
+      }
     } catch (err) {
-      setError(err.response?.data?.message || 'Google registration temporarily unavailable. Please try again.');
+      console.error('Google Sign-Up Error:', err);
+      setError(
+        err.response?.data?.message || err.message || 'Google registration temporarily unavailable. Please refresh and try again.'
+      );
     } finally {
       setOauthLoading(false);
     }

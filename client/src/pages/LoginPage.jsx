@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+import { googleAuthApi } from '../api/auth';
 import PageTransition from '../components/common/PageTransition';
 import AuthShowcase from '../components/auth/AuthShowcase';
 import {
@@ -70,10 +71,21 @@ const LoginPage = () => {
     setOauthLoading(true);
     setError('');
     try {
-      await loginWithGoogle();
-      navigate(from, { replace: true });
+      if (typeof loginWithGoogle === 'function') {
+        await loginWithGoogle();
+        navigate(from, { replace: true });
+      } else {
+        const res = await googleAuthApi();
+        if (res && res.token) {
+          localStorage.setItem('token', res.token);
+          window.location.href = from;
+        }
+      }
     } catch (err) {
-      setError(err.response?.data?.message || 'Google sign-in temporarily unavailable. Please try again.');
+      console.error('Google Sign-In Error:', err);
+      setError(
+        err.response?.data?.message || err.message || 'Google sign-in temporarily unavailable. Please refresh and try again.'
+      );
     } finally {
       setOauthLoading(false);
     }
