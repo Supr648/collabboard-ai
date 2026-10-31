@@ -1,12 +1,11 @@
 services:
   - type: web
-    name: collabboard-ai-api
+    name: collabboard-ai
     runtime: node
     plan: free
     region: oregon
-    rootDir: server
-    buildCommand: npm install
-    startCommand: node src/server.js
+    buildCommand: npm run install:all && npm run build
+    startCommand: npm start
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
@@ -15,7 +14,5 @@ services:
         value: 10000
       - key: JWT_SECRET
         generateValue: true
-      - key: CLIENT_URL
-        sync: false
       - key: MONGODB_URI
         sync: false
